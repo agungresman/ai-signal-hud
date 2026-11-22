@@ -1,0 +1,68 @@
+{
+  "manifest_version": 2,
+  "name": "Stockity AI Signal HUD",
+  "version": "1.1.0",
+  "description": "Pembaca harga live (WebSocket + DOM) & analisa sinyal BUY/SELL berbasis AI (EMA, RSI, Bollinger Bands, Momentum) untuk Firefox.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "stockity-ai-hud@local.personal",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.openai.com/*",
+    "https://api.groq.com/*",
+    "https://openrouter.ai/*",
+    "https://discord.com/api/webhooks/*",
+    "https://discordapp.com/api/webhooks/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "<all_urls>"
+  ],
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "browser_action": {
+    "default_icon": "icons/icon.svg",
+    "default_title": "Stockity AI Signal HUD",
+    "default_popup": "popup.html",
+    "default_area": "navbar"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "web_accessible_resources": [
+    "ws_hook.js"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "ws_injector.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "lib/indicators.js",
+        "content.js"
+      ],
+      "css": [
+        "hud.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

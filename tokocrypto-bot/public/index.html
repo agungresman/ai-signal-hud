@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tokocrypto AI Spot Trading Bot</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card: #111827;
+      --card2: #1e293b;
+      --border: rgba(148, 163, 184, 0.2);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --green: #10b981;
+      --red: #f43f5e;
+      --blue: #38bdf8;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 40px; }
+    header {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 12px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand h1 { margin: 0; font-size: 18px; }
+    .pill {
+      padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 11px;
+      background: rgba(56, 189, 248, 0.16); color: var(--blue); border: 1px solid rgba(56, 189, 248, 0.4);
+    }
+    .pill.live { background: rgba(244, 63, 94, 0.2); color: #fda4af; border-color: rgba(244, 63, 94, 0.5); }
+    .actions { display: flex; gap: 8px; }
+    button {
+      padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card2); color: var(--text); font-weight: 700; font-size: 12px; cursor: pointer;
+    }
+    button:hover { filter: brightness(1.12); }
+    button.primary { background: linear-gradient(135deg, #0284c7, #2563eb); border-color: transparent; color: #fff; }
+    button.danger { background: #e11d48; border-color: transparent; color: #fff; }
+    button.success { background: #059669; border-color: transparent; color: #fff; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { padding: 8px 14px; border-radius: 8px; background: var(--card); color: var(--muted); }
+    .tab.active { background: rgba(56, 189, 248, 0.16); color: var(--blue); border-color: rgba(56, 189, 248, 0.45); }
+    .hidden { display: none !important; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+    }
+    .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin-bottom: 4px; }
+    .big { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+    .alert {
+      padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-weight: 600;
+      border: 1px solid rgba(244, 63, 94, 0.5); background: rgba(136, 19, 55, 0.35); color: #fecdd3;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .tag { padding: 2px 7px; border-radius: 5px; font-weight: 700; font-size: 11px; }
+    .tag.WIN { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .tag.LOSS { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
+    .pos-compare {
+      margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+      background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border);
+      font-size: 11.5px; line-height: 1.55;
+    }
+    .pos-row { display: flex; justify-content: space-between; gap: 8px; }
+    .pos-badge {
+      display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 13px; font-weight: 800;
+    }
+    .pos-badge.up { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.45); }
+    .pos-badge.down { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.45); }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .field input, .field select {
+      width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: 13px;
+    }
+    .logs { max-height: 220px; overflow-y: auto; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 1.5; }
+    .log-error { color: #fca5a5; }
+    .log-warn { color: #fde68a; }
+    #toast { margin-top: 10px; font-size: 12px; color: var(--blue); min-height: 18px; }
+    .chart-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    #candle-canvas { width: 100%; height: 320px; display: block; border-radius: 8px; background: #070d19; cursor: crosshair; }
+    #chart-ohlc { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text); }
+
+    /* Modal PIN */
+    .modal-backdrop {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(3, 7, 18, 0.92); backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; padding: 16px;
+    }
+    .modal-box {
+      width: 100%; max-width: 330px; background: #0f172a;
+      border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 14px;
+      padding: 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+    }
+    .pin-dots {
+      display: flex; justify-content: center; gap: 10px; margin: 10px 0 14px;
+    }
+    .pin-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 2px solid #475569; background: #0b1120;
+      transition: all 0.15s ease;
+    }
+    .pin-dot.filled {
+      background: #38bdf8; border-color: #38bdf8;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+    }
+    .pin-keypad {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 12px;
+    }
+    .key-btn {
+      padding: 10px; font-size: 16px; font-weight: 700; border-radius: 8px;
+      background: #1e293b; border: 1px solid rgba(148, 163, 184, 0.18); color: #f8fafc;
+      cursor: pointer; user-select: none; transition: background 0.1s;
+    }
+    .key-btn:hover { background: #334155; }
+    .key-btn:active { background: #0284c7; }
+    .key-btn.action { font-size: 13px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <!-- MODAL LOGIN PIN (SECURITY ACCESS) -->
+  <div id="pin-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div style="font-size:32px;margin-bottom:6px;">🔐</div>
+      <h2 style="margin:0 0 4px;font-size:17px;">Tokocrypto Bot Security</h2>
+      <p style="margin:0 0 12px;color:var(--muted);font-size:11.5px;line-height:1.4;">
+        Akses web diproteksi PIN tanpa database.<br/>
+        <span style="color:#38bdf8;">PIN berganti otomatis setiap 10x login.</span>
+      </p>
+
+      <form id="pin-form" onsubmit="event.preventDefault(); submitPinLogin();">
+        <div style="position:relative;margin-bottom:8px;">
+          <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+            placeholder="Masukkan 6 Digit PIN"
+            style="width:100%;padding:10px 12px;font-size:18px;text-align:center;letter-spacing:6px;border-radius:10px;background:#090d16;border:1px solid #334155;color:#f8fafc;font-family:ui-monospace,Menlo,monospace;"
+            autocomplete="off" />
+          <button type="button" id="toggle-show-pin" title="Lihat/Sembunyikan PIN"
+            style="position:absolute;right:8px;top:7px;background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;font-size:14px;">👁️</button>
+        </div>
+
+        <div class="pin-dots" id="pin-dots-container">
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+        </div>
+
+        <div class="pin-keypad">
+          <button type="button" class="key-btn" data-key="1">1</button>
+          <button type="button" class="key-btn" data-key="2">2</button>
+          <button type="button" class="key-btn" data-key="3">3</button>
+          <button type="button" class="key-btn" data-key="4">4</button>
+          <button type="button" class="key-btn" data-key="5">5</button>
+          <button type="button" class="key-btn" data-key="6">6</button>
+          <button type="button" class="key-btn" data-key="7">7</button>
+          <button type="button" class="key-btn" data-key="8">8</button>
+          <button type="button" class="key-btn" data-key="9">9</button>
+          <button type="button" class="key-btn action" id="key-clear" title="Hapus">⌫</button>
+          <button type="button" class="key-btn" data-key="0">0</button>
+          <button type="submit" class="key-btn action primary" id="key-enter" style="background:#0284c7;color:#fff;" title="Kirim">OK</button>
+        </div>
+
+        <div id="pin-error" style="color:#fb7185;font-size:11.5px;min-height:18px;margin-bottom:8px;"></div>
+        <button type="submit" id="pin-submit-btn" class="primary" style="width:100%;padding:10px;font-size:13px;border-radius:8px;">🔓 Masuk ke Dashboard</button>
+        <div style="margin-top:12px;text-align:center;">
+          <a href="javascript:void(0)" id="btn-forgot-pin" style="color:#38bdf8;font-size:11.5px;text-decoration:none;cursor:pointer;">🔑 Lupa PIN? Reset & Kirim ke Email</a>
+          <div id="forgot-pin-status" style="font-size:11px;margin-top:6px;min-height:16px;"></div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL NOTIFIKASI PIN BERGANTI (LOGIN KE-10) -->
+  <div id="pin-rotated-modal" class="modal-backdrop hidden">
+    <div class="modal-box" style="border-color:#f59e0b;max-width:380px;">
+      <div style="font-size:38px;margin-bottom:8px;">⚠️</div>
+      <h2 style="margin:0 0 6px;font-size:17px;color:#f59e0b;">PIN Berganti Otomatis!</h2>
+      <p style="margin:0 0 14px;color:#cbd5e1;font-size:12px;line-height:1.5;">
+        Ini adalah <b>login ke-10</b> Anda! Sesuai aturan keamanan tanpa database, PIN lama Anda telah kadaluarsa.
+      </p>
+      <div style="background:#090d16;border:1px dashed #f59e0b;padding:12px;border-radius:8px;margin-bottom:14px;">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;">PIN Baru Anda (Catat Sekarang)</div>
+        <div id="new-pin-display" style="font-size:24px;font-weight:800;letter-spacing:4px;color:#38bdf8;margin-top:4px;">------</div>
+      </div>
+      <p style="color:var(--muted);font-size:11px;margin-bottom:14px;">
+        Gunakan PIN baru ini saat Anda masuk di login berikutnya.
+      </p>
+      <button type="button" class="primary" style="width:100%;padding:9px;" onclick="closeRotatedModal()">Saya Sudah Catat PIN Baru</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <h1>Tokocrypto AI Spot Bot</h1>
+        <span class="pill" id="mode-pill">PAPER TRADING</span>
+      </div>
+      <div class="actions">
+        <div id="pin-badge-btn" class="pill" style="cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border-color:rgba(59,130,246,0.4);" title="Status PIN Keamanan">
+          🔐 <span id="pin-status-text">PIN: Login --/10</span>
+        </div>
+        <button id="scan-btn" class="primary">🔍 Scan Sekarang</button>
+        <button id="toggle-btn" class="danger">⏹ STOP</button>
+        <button id="logout-btn" style="background:#1e293b;border-color:#334155;color:#94a3b8;" title="Kunci Dashboard (Logout)">🔒</button>
+      </div>
+    </header>
+
+    <div id="guard-alert" class="alert hidden"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="dash">Dashboard</button>
+      <button class="tab" data-tab="history">Riwayat Trade</button>
+      <button class="tab" data-tab="settings">Pengaturan</button>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="tab-dash">
+      <div class="grid">
+        <div class="card">
+          <div class="label" id="sym-label">Harga Live</div>
+          <div class="big" id="live-price">--</div>
+          <div class="sub" id="price-meta">Menghubungkan ke API...</div>
+        </div>
+        <div class="card">
+          <div class="label">Saldo Paper & PnL Hari Ini</div>
+          <div class="big" id="balance-val">--</div>
+          <div class="sub" id="balance-idr" style="color:#e2e8f0;font-weight:600;">≈ Rp --</div>
+          <div class="sub" id="daily-pnl">PnL Harian: --</div>
+        </div>
+        <div class="card">
+          <div class="label">Posisi Spot Aktif</div>
+          <div class="big" id="pos-status">KOSONG</div>
+          <div class="sub" id="pos-detail">Menunggu sinyal BUY valid</div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button id="manual-buy-btn" class="success" style="padding:5px 10px;">🟢 BUY Manual</button>
+            <button id="close-pos-btn" class="danger hidden" style="padding:5px 10px;">🔴 Jual Manual</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">Keputusan AI Terakhir</div>
+          <div class="big" id="ai-decision">WAIT</div>
+          <div class="sub" id="ai-reason">Belum ada analisa AI.</div>
+        </div>
+      </div>
+
+      <!-- KOTAK BARU: PERBANDINGAN ENTRY VS SEKARANG & SALDO RUPIAH -->
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+          <div>
+            <div class="label" style="margin-bottom:2px;">Perbandingan Posisi Entry vs Saat Ini & Estimasi Rupiah</div>
+            <div class="sub" id="cmp-rate-info" style="margin-top:0;">Kurs estimasi: --</div>
+          </div>
+          <div id="cmp-state-badge"><span class="tag" style="background:rgba(148,163,184,0.18);color:#cbd5e1;">BELUM ADA POSISI</span></div>
+        </div>
+        <div class="grid" style="margin-bottom:0;">
+          <div class="pos-compare" style="margin-top:0;">
+            <div class="label">Harga Entry vs Harga Sekarang</div>
+            <div class="pos-row"><span>Harga Entry:</span><strong id="cmp-entry-price">--</strong></div>
+            <div class="pos-row"><span>Harga Sekarang:</span><strong id="cmp-cur-price">--</strong></div>
+            <div class="pos-row"><span>Selisih Harga:</span><strong id="cmp-price-diff">--</strong></div>
+          </div>
+          <div class="pos-compare" style="margin-top:0;">
+            <div class="label">Nilai Posisi & Untung / Rugi Bersih</div>
+            <div class="pos-row"><span>Modal Entry:</span><strong id="cmp-cost">--</strong></div>
+            <div class="pos-row"><span>Nilai Sekarang:</span><strong id="cmp-cur-val">--</strong></div>
+            <div class="pos-row"><span>Status (Net Fee):</span><strong id="cmp-net-pnl">--</strong></div>
+          </div>
+          <div class="pos-compare" style="margin-top:0;">
+            <div class="label">Total Saldo Saat Ini (Kas + Posisi)</div>
+            <div class="pos-row"><span>Saldo Kas Tersedia:</span><strong id="cmp-cash">--</strong></div>
+            <div class="pos-row"><span>Total Ekuitas:</span><strong id="cmp-equity">--</strong></div>
+            <div class="pos-row"><span>Total dlm Rupiah:</span><strong id="cmp-equity-idr" style="color:#38bdf8;">--</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <div class="chart-header">
+          <div>
+            <div class="label" style="margin-bottom:2px;" id="chart-title">Grafik Candlestick Live</div>
+            <div id="chart-ohlc">Arahkan kursor ke candle untuk melihat O / H / L / C</div>
+          </div>
+          <div class="chart-legend">
+            <span><span class="legend-dot" style="background:#f59e0b"></span>EMA 9</span>
+            <span><span class="legend-dot" style="background:#38bdf8"></span>EMA 21</span>
+            <span><span class="legend-dot" style="background:rgba(148,163,184,0.7)"></span>Bollinger (20,2)</span>
+            <span><span class="legend-dot" style="background:#10b981"></span>TP</span>
+            <span><span class="legend-dot" style="background:#f43f5e"></span>SL</span>
+          </div>
+        </div>
+        <canvas id="candle-canvas"></canvas>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="label">Tren (EMA 9 / 21 / 50)</div>
+          <div class="big" style="font-size:17px" id="ind-trend">--</div>
+          <div class="sub" id="ind-setup">Setup: --</div>
+        </div>
+        <div class="card">
+          <div class="label">RSI (14)</div>
+          <div class="big" style="font-size:17px" id="ind-rsi">--</div>
+          <div class="sub" id="ind-candle">Candle: --</div>
+        </div>
+        <div class="card">
+          <div class="label">Bollinger Bands (20, 2)</div>
+          <div class="big" style="font-size:17px" id="ind-bb">--</div>
+          <div class="sub" id="ind-er">Efficiency Ratio: --</div>
+        </div>
+        <div class="card">
+          <div class="label">Volume & Volatilitas (ATR)</div>
+          <div class="big" style="font-size:17px" id="ind-vol">--</div>
+          <div class="sub" id="ind-atr">ATR: --</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Log Aktivitas Terbaru</div>
+        <div class="logs" id="logs-box"></div>
+      </div>
+    </div>
+
+    <!-- RIWAYAT -->
+    <div id="tab-history" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div id="hist-stats" style="font-weight:700;">Belum ada transaksi selesai.</div>
+          <button id="reset-paper-btn">Reset Saldo & Riwayat Paper</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Waktu</th><th>Pair</th><th>Mode</th><th>Entry → Exit</th><th>Alasan</th><th>PnL Bersih</th><th>Hasil</th>
+            </tr>
+          </thead>
+          <tbody id="hist-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PENGATURAN -->
+    <div id="tab-settings" class="hidden">
+      <div class="card">
+        <div class="form-grid">
+          <div class="field">
+            <label>Mode Trading</label>
+            <select id="cfg-mode">
+              <option value="paper">Paper Trading (Simulasi Harga Live)</option>
+              <option value="live">Live Trading (API Key Tokocrypto)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Pair Koin (misal BTCUSDT, BTCIDR, ETHUSDT, SOLUSDT)</label>
+            <input id="cfg-symbol" value="BTCUSDT" />
+          </div>
+          <div class="field">
+            <label>Timeframe Candle</label>
+            <select id="cfg-interval">
+              <option value="1m">1 Menit (1m - Cepat, banyak noise)</option>
+              <option value="3m">3 Menit (3m)</option>
+              <option value="5m">5 Menit (5m - Seimbang)</option>
+              <option value="15m">15 Menit (15m - Disarankan Spot)</option>
+              <option value="1h">1 Jam (1h)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Modal per Order (Quote: USDT / IDR)</label>
+            <input type="number" id="cfg-order-size" value="100" />
+          </div>
+          <div class="field">
+            <label>Stop Loss (%)</label>
+            <input type="number" step="0.1" id="cfg-sl" value="1.5" />
+          </div>
+          <div class="field">
+            <label>Take Profit (%)</label>
+            <input type="number" step="0.1" id="cfg-tp" value="3.0" />
+          </div>
+          <div class="field">
+            <label>Aktifkan Trailing Saat Profit (%)</label>
+            <input type="number" step="0.1" id="cfg-trail-act" value="1.5" />
+          </div>
+          <div class="field">
+            <label>Jarak Trailing Stop (%)</label>
+            <input type="number" step="0.1" id="cfg-trail-pct" value="0.8" />
+          </div>
+          <div class="field">
+            <label>Min Skor Gabungan AI (%)</label>
+            <input type="number" id="cfg-min-conf" value="70" />
+          </div>
+          <div class="field">
+            <label>Batas Rugi Harian (%)</label>
+            <input type="number" step="0.5" id="cfg-max-daily" value="5.0" />
+          </div>
+          <div class="field">
+            <label>Provider AI</label>
+            <select id="cfg-ai-provider">
+              <option value="ollama">Ollama Lokal (Gratis, 0 Limit)</option>
+              <option value="groq">Groq</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI / Compatible</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Model AI</label>
+            <input id="cfg-ai-model" value="qwen2.5:3b" />
+          </div>
+          <div class="field">
+            <label>API Key AI (kosongkan jika Ollama Lokal)</label>
+            <input type="password" id="cfg-ai-key" placeholder="Opsional untuk Ollama" />
+          </div>
+          <div class="field">
+            <label>Endpoint AI</label>
+            <input id="cfg-ai-endpoint" value="http://localhost:11434/api/chat" />
+          </div>
+          <div class="field">
+            <label>Discord Webhook URL</label>
+            <input type="password" id="cfg-discord-url" placeholder="https://discord.com/api/webhooks/..." />
+          </div>
+          <div class="field">
+            <label>Tokocrypto API Key (khusus mode LIVE)</label>
+            <input type="password" id="cfg-tc-key" placeholder="Kosongkan saat Paper Trading" />
+          </div>
+          <div class="field">
+            <label>Tokocrypto API Secret (khusus mode LIVE)</label>
+            <input type="password" id="cfg-tc-secret" placeholder="Kosongkan saat Paper Trading" />
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">
+          <button id="test-ai-btn">🤖 Tes Koneksi AI (Ollama / Cloud)</button>
+          <button id="test-tc-btn">🔑 Tes API & Saldo Tokocrypto</button>
+          <button id="test-discord-btn">🧪 Tes Webhook Discord</button>
+          <button id="save-cfg-btn" class="primary">💾 Simpan Pengaturan</button>
+        </div>
+        <div id="toast"></div>
+
+        <div class="card" style="margin-top:14px;border-color:rgba(56,189,248,0.3);background:rgba(15,23,42,0.6);">
+          <div class="label" style="color:var(--blue);">🔐 Otentikasi Akses PIN (Tanpa Database)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:10px;">
+            <div style="background:#090d16;padding:10px 14px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;">PIN Aktif Saat Ini</div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+                <span id="cfg-display-pin" style="font-size:16px;font-weight:800;letter-spacing:2px;color:#38bdf8;">••••••</span>
+                <button type="button" id="btn-toggle-view-pin" style="padding:2px 7px;font-size:10px;">Lihat</button>
+              </div>
+            </div>
+            <div style="background:#090d16;padding:10px 14px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;">Penggunaan PIN Ini</div>
+              <div id="cfg-pin-counter" style="font-size:13px;font-weight:700;color:#f8fafc;margin-top:4px;">Login 0 dari 10 kali</div>
+            </div>
+            <div style="background:#090d16;padding:10px 14px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;">Sisa Sebelum Berganti</div>
+              <div id="cfg-pin-remaining" style="font-size:13px;font-weight:700;color:#34d399;margin-top:4px;">10 kali lagi</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;">
+            💡 Sistem ini menyimpan PIN di file JSON tanpa database. Setiap kali PIN berhasil digunakan sebanyak 10 kali login, PIN akan kadaluarsa dan otomatis digenerate PIN baru 6 digit demi keamanan dashboard di cloud.
+          </div>
+        </div>
+
+        <!-- KONFIGURASI SMTP EMAIL -->
+        <div class="card" style="margin-top:14px;border-color:rgba(56,189,248,0.3);background:rgba(15,23,42,0.6);">
+          <div class="label" style="color:var(--blue);">📧 Konfigurasi SMTP Email (Kirim Password & Reset PIN)</div>
+          <p style="font-size:11px;color:var(--muted);margin:4px 0 12px;line-height:1.5;">
+            Konfigurasi SMTP email untuk pengiriman PIN baru secara otomatis setiap kali mencapai 10x login atau saat meminta reset PIN dari halaman login.
+          </p>
+          <div class="settings-grid">
+            <div class="field">
+              <label>SMTP Host</label>
+              <input id="cfg-smtp-host" placeholder="contoh: smtp.gmail.com" />
+            </div>
+            <div class="field">
+              <label>SMTP Port</label>
+              <input type="number" id="cfg-smtp-port" placeholder="465 (SSL) atau 587 (TLS)" value="465" />
+            </div>
+            <div class="field">
+              <label>SMTP User / Email Pengirim</label>
+              <input id="cfg-smtp-user" placeholder="emailanda@gmail.com" />
+            </div>
+            <div class="field">
+              <label>SMTP Password / App Password</label>
+              <input type="password" id="cfg-smtp-pass" placeholder="Password aplikasi / token SMTP" />
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+              <label>Email Penerima PIN (Tujuan Reset & Notifikasi)</label>
+              <input id="cfg-smtp-to" placeholder="tujuan@email.com (bisa sama dengan SMTP User)" />
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
+            <button id="test-smtp-btn">📧 Tes Kirim Email SMTP</button>
+            <button id="reset-pin-btn" style="background:#ef4444;border-color:#b91c1c;color:#fff;">🔄 Reset PIN Sekarang & Kirim ke Email</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PROVIDER_DEF = {
+      ollama: { model: "qwen2.5:3b", endpoint: "http://localhost:11434/api/chat" },
+      groq: { model: "llama-3.1-8b-instant", endpoint: "https://api.groq.com/openai/v1/chat/completions" },
+      gemini: { model: "gemini-3.8-flash", endpoint: "" },
+      openai: { model: "gpt-4o-mini", endpoint: "https://api.openai.com/openai/v1/chat/completions" }
+    };
+
+    let settingsLoaded = false;
+    let latestState = null;
+    let hoverIndex = -1;
+    let authToken = localStorage.getItem("tc_bot_token") || "";
+    let activePinCached = "";
+    let isPinRevealed = false;
+
+    function getAuthHeaders() {
+      const headers = { "Content-Type": "application/json" };
+      if (authToken) headers["Authorization"] = "Bearer " + authToken;
+      return headers;
+    }
+
+    const pinInput = document.getElementById("pin-input");
+
+    function updatePinDots(val) {
+      const dots = document.querySelectorAll("#pin-dots-container .pin-dot");
+      dots.forEach((dot, idx) => {
+        dot.classList.toggle("filled", idx < val.length);
+      });
+    }
+
+    function showPinModal(err = "") {
+      const modal = document.getElementById("pin-modal");
+      if (!modal) return;
+      const isAlreadyVisible = !modal.classList.contains("hidden");
+      if (!isAlreadyVisible) {
+        modal.classList.remove("hidden");
+        pinInput.value = "";
+        updatePinDots("");
+        setTimeout(() => pinInput.focus(), 150);
+      }
+      if (err) {
+        document.getElementById("pin-error").textContent = err;
+      }
+    }
+
+    function hidePinModal() {
+      const modal = document.getElementById("pin-modal");
+      if (modal) modal.classList.add("hidden");
+      document.getElementById("pin-error").textContent = "";
+      pinInput.value = "";
+      updatePinDots("");
+    }
+
+    function showRotatedModal(newPin) {
+      document.getElementById("new-pin-display").textContent = newPin;
+      document.getElementById("pin-rotated-modal").classList.remove("hidden");
+    }
+
+    function closeRotatedModal() {
+      document.getElementById("pin-rotated-modal").classList.add("hidden");
+    }
+
+    async function submitPinLogin() {
+      const pin = pinInput.value.trim();
+      const errEl = document.getElementById("pin-error");
+      const btn = document.getElementById("pin-submit-btn");
+
+      if (!pin) {
+        errEl.textContent = "Silakan masukkan PIN.";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "⏳ Memverifikasi...";
+      errEl.textContent = "";
+
+      try {
+        const resp = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin })
+        });
+        const data = await resp.json();
+
+        if (!resp.ok || !data.ok) {
+          errEl.textContent = data.message || "PIN salah. Coba lagi.";
+          btn.disabled = false;
+          btn.textContent = "🔓 Masuk ke Dashboard";
+          pinInput.value = "";
+          updatePinDots("");
+          setTimeout(() => pinInput.focus(), 150);
+          return;
+        }
+
+        authToken = data.token;
+        localStorage.setItem("tc_bot_token", authToken);
+        hidePinModal();
+
+        if (data.pinRotated) {
+          showRotatedModal(data.currentPin);
+        }
+
+        refresh();
+      } catch (err) {
+        errEl.textContent = "Koneksi ke server gagal: " + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "🔓 Masuk ke Dashboard";
+      }
+    }
+
+    pinInput.addEventListener("input", () => {
+      pinInput.value = pinInput.value.replace(/\D/g, "").slice(0, 6);
+      updatePinDots(pinInput.value);
+      if (pinInput.value.length === 6) {
+        setTimeout(() => submitPinLogin(), 150);
+      }
+    });
+
+    document.querySelectorAll(".key-btn[data-key]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (pinInput.value.length < 6) {
+          pinInput.value += btn.dataset.key;
+          updatePinDots(pinInput.value);
+          if (pinInput.value.length === 6) {
+            setTimeout(() => submitPinLogin(), 150);
+          }
+        }
+      });
+    });
+
+    document.getElementById("key-clear").addEventListener("click", () => {
+      pinInput.value = pinInput.value.slice(0, -1);
+      updatePinDots(pinInput.value);
+      pinInput.focus();
+    });
+
+    document.getElementById("btn-forgot-pin").addEventListener("click", async () => {
+      const statusEl = document.getElementById("forgot-pin-status");
+      statusEl.style.color = "#38bdf8";
+      statusEl.textContent = "⏳ Memproses reset PIN dan mengirim email...";
+      try {
+        const resp = await fetch("/api/auth/reset-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Lupa PIN via Halaman Login" })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          statusEl.style.color = "#34d399";
+          statusEl.textContent = `✅ ${data.message}`;
+          if (!data.emailSent) {
+            statusEl.textContent += ` (PIN Baru Anda: ${data.newPin})`;
+          }
+        } else {
+          statusEl.style.color = "#fb7185";
+          statusEl.textContent = `❌ ${data.message || "Gagal mereset PIN."}`;
+        }
+      } catch (err) {
+        statusEl.style.color = "#fb7185";
+        statusEl.textContent = `❌ Error: ${err.message}`;
+      }
+    });
+
+    async function handleLogout() {
+      if (!confirm("Kunci dashboard sekarang? Anda harus memasukkan PIN untuk membukanya kembali.")) return;
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+      } catch (_) {}
+      authToken = "";
+      localStorage.removeItem("tc_bot_token");
+      showPinModal("Anda telah keluar. Masukkan PIN untuk masuk.");
+    }
+
+    document.getElementById("logout-btn").addEventListener("click", handleLogout);
+    document.getElementById("pin-badge-btn").addEventListener("click", () => {
+      document.querySelector('[data-tab="settings"]').click();
+    });
+
+    document.getElementById("toggle-show-pin").addEventListener("click", () => {
+      pinInput.type = pinInput.type === "password" ? "text" : "password";
+    });
+
+    document.getElementById("btn-toggle-view-pin").addEventListener("click", () => {
+      isPinRevealed = !isPinRevealed;
+      const el = document.getElementById("cfg-display-pin");
+      const btn = document.getElementById("btn-toggle-view-pin");
+      if (isPinRevealed && activePinCached) {
+        el.textContent = activePinCached;
+        btn.textContent = "Tutup";
+      } else {
+        el.textContent = "••••••";
+        btn.textContent = "Lihat";
+      }
+    });
+
+    function calcEma(values, period) {
+      const out = new Array(values.length).fill(null);
+      if (values.length < period) return out;
+      let sum = 0;
+      for (let i = 0; i < period; i++) sum += values[i];
+      let prev = sum / period;
+      out[period - 1] = prev;
+      const k = 2 / (period + 1);
+      for (let i = period; i < values.length; i++) {
+        prev = values[i] * k + prev * (1 - k);
+        out[i] = prev;
+      }
+      return out;
+    }
+
+    function calcBB(values, period = 20, mult = 2) {
+      const up = new Array(values.length).fill(null);
+      const lo = new Array(values.length).fill(null);
+      for (let i = period - 1; i < values.length; i++) {
+        let sum = 0;
+        for (let j = i - period + 1; j <= i; j++) sum += values[j];
+        const mean = sum / period;
+        let v = 0;
+        for (let j = i - period + 1; j <= i; j++) v += (values[j] - mean) * (values[j] - mean);
+        const sd = Math.sqrt(v / period);
+        up[i] = mean + mult * sd;
+        lo[i] = mean - mult * sd;
+      }
+      return { up, lo };
+    }
+
+    function drawCandleChart(s) {
+      const canvas = document.getElementById("candle-canvas");
+      if (!canvas || !s || !Array.isArray(s.candles) || s.candles.length < 2) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width < 10) return;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = rect.height;
+      const padL = 10, padR = 74, padT = 14, padB = 24;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const volH = plotH * 0.18;
+      const priceH = plotH - volH - 6;
+
+      const candles = s.candles;
+      const closes = candles.map((c) => c.close);
+      const ema9 = calcEma(closes, 9);
+      const ema21 = calcEma(closes, 21);
+      const bb = calcBB(closes, 20, 2);
+
+      let minP = Infinity, maxP = -Infinity, maxVol = 0;
+      for (let i = 0; i < candles.length; i++) {
+        if (candles[i].low < minP) minP = candles[i].low;
+        if (candles[i].high > maxP) maxP = candles[i].high;
+        if (bb.lo[i] && bb.lo[i] < minP) minP = bb.lo[i];
+        if (bb.up[i] && bb.up[i] > maxP) maxP = bb.up[i];
+        if (candles[i].volume > maxVol) maxVol = candles[i].volume;
+      }
+      if (s.position) {
+        minP = Math.min(minP, s.position.stopLossPrice);
+        maxP = Math.max(maxP, s.position.takeProfitPrice);
+      }
+      const pPad = (maxP - minP) * 0.06 || 1;
+      minP -= pPad;
+      maxP += pPad;
+      const pSpan = maxP - minP || 1;
+
+      const mapY = (p) => padT + priceH * (1 - (p - minP) / pSpan);
+      const stepX = plotW / candles.length;
+      const barW = Math.max(3, Math.min(12, stepX * 0.65));
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid horizontal & label harga kanan
+      ctx.strokeStyle = "rgba(148,163,184,0.1)";
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "10.5px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "left";
+      for (let g = 0; g <= 4; g++) {
+        const val = minP + (pSpan * g) / 4;
+        const y = mapY(val);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(W - padR, y);
+        ctx.stroke();
+        ctx.fillText(val.toLocaleString("en-US", { maximumFractionDigits: 2 }), W - padR + 6, y + 3);
+      }
+
+      // Volume bars
+      if (maxVol > 0) {
+        for (let i = 0; i < candles.length; i++) {
+          const c = candles[i];
+          const x = padL + i * stepX + stepX / 2;
+          const h = (c.volume / maxVol) * volH;
+          ctx.fillStyle = c.close >= c.open ? "rgba(16,185,129,0.22)" : "rgba(244,63,94,0.22)";
+          ctx.fillRect(x - barW / 2, padT + plotH - h, barW, h);
+        }
+      }
+
+      // Helper garis indikator
+      const drawLine = (arr, color, dash = []) => {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] === null) continue;
+          const x = padL + i * stepX + stepX / 2;
+          const y = mapY(arr[i]);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      drawLine(bb.up, "rgba(148,163,184,0.45)", [3, 3]);
+      drawLine(bb.lo, "rgba(148,163,184,0.45)", [3, 3]);
+      drawLine(ema21, "#38bdf8");
+      drawLine(ema9, "#f59e0b");
+
+      // Candlesticks
+      for (let i = 0; i < candles.length; i++) {
+        const c = candles[i];
+        const x = padL + i * stepX + stepX / 2;
+        const isUp = c.close >= c.open;
+        const color = isUp ? "#10b981" : "#f43f5e";
+        const yH = mapY(c.high), yL = mapY(c.low), yO = mapY(c.open), yC = mapY(c.close);
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(x, yH);
+        ctx.lineTo(x, yL);
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        const bodyTop = Math.min(yO, yC);
+        const bodyH = Math.max(1.5, Math.abs(yC - yO));
+        ctx.fillRect(x - barW / 2, bodyTop, barW, bodyH);
+      }
+
+      // Garis TP / SL / Entry jika ada posisi aktif
+      const drawHLine = (price, color, label) => {
+        const y = mapY(price);
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(W - padR, y);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.font = "bold 10px ui-monospace, Menlo, monospace";
+        ctx.fillText(label, padL + 4, y - 3);
+        ctx.restore();
+      };
+
+      if (s.position) {
+        drawHLine(s.position.takeProfitPrice, "#10b981", `TP ${s.position.takeProfitPrice.toFixed(2)}`);
+        drawHLine(s.position.entryPrice, "#e2e8f0", `ENTRY ${s.position.entryPrice}`);
+        drawHLine(s.position.stopLossPrice, "#f43f5e", `${s.position.trailingActive ? "TRAIL" : "SL"} ${s.position.stopLossPrice.toFixed(2)}`);
+      }
+
+      // Garis harga live saat ini
+      if (s.lastPrice) {
+        const yNow = mapY(s.lastPrice);
+        ctx.fillStyle = "#0284c7";
+        ctx.fillRect(W - padR + 2, yNow - 8, padR - 4, 16);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 10px ui-monospace, Menlo, monospace";
+        ctx.fillText(Number(s.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }), W - padR + 5, yNow + 3);
+      }
+
+      // Crosshair & OHLC info saat hover
+      const idx = hoverIndex >= 0 && hoverIndex < candles.length ? hoverIndex : candles.length - 1;
+      const hc = candles[idx];
+      if (hoverIndex >= 0 && hoverIndex < candles.length) {
+        const hx = padL + idx * stepX + stepX / 2;
+        ctx.save();
+        ctx.strokeStyle = "rgba(226,232,240,0.35)";
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(hx, padT);
+        ctx.lineTo(hx, H - padB);
+        ctx.stroke();
+        ctx.restore();
+      }
+      const tStr = new Date(hc.openTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      document.getElementById("chart-ohlc").textContent =
+        `${tStr}  O:${hc.open}  H:${hc.high}  L:${hc.low}  C:${hc.close}  Vol:${hc.volume.toFixed(2)}`;
+    }
+
+    const canvasEl = document.getElementById("candle-canvas");
+    canvasEl.addEventListener("mousemove", (e) => {
+      if (!latestState || !latestState.candles || latestState.candles.length === 0) return;
+      const rect = canvasEl.getBoundingClientRect();
+      const x = e.clientX - rect.left - 10;
+      const plotW = rect.width - 84;
+      const idx = Math.floor((x / plotW) * latestState.candles.length);
+      hoverIndex = Math.max(0, Math.min(latestState.candles.length - 1, idx));
+      drawCandleChart(latestState);
+    });
+    canvasEl.addEventListener("mouseleave", () => {
+      hoverIndex = -1;
+      if (latestState) drawCandleChart(latestState);
+    });
+    window.addEventListener("resize", () => {
+      if (latestState) drawCandleChart(latestState);
+    });
+
+    document.querySelectorAll(".tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const target = btn.dataset.tab;
+        ["dash", "history", "settings"].forEach((t) => {
+          document.getElementById("tab-" + t).classList.toggle("hidden", t !== target);
+        });
+      });
+    });
+
+    document.getElementById("cfg-ai-provider").addEventListener("change", (e) => {
+      const def = PROVIDER_DEF[e.target.value];
+      if (def) {
+        document.getElementById("cfg-ai-model").value = def.model;
+        document.getElementById("cfg-ai-endpoint").value = def.endpoint;
+      }
+    });
+
+    async function post(url, body = {}) {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body)
+      });
+      if (r.status === 401) {
+        showPinModal("Sesi berakhir atau PIN diperlukan.");
+        throw new Error("Unauthorized");
+      }
+      return r.json();
+    }
+
+    function setToast(msg) {
+      document.getElementById("toast").textContent = msg;
+    }
+
+    document.getElementById("toggle-btn").addEventListener("click", async () => {
+      await post("/api/toggle");
+      refresh();
+    });
+
+    document.getElementById("scan-btn").addEventListener("click", async () => {
+      const btn = document.getElementById("scan-btn");
+      btn.disabled = true;
+      btn.textContent = "⏳ Scanning...";
+      await post("/api/scan");
+      btn.disabled = false;
+      btn.textContent = "🔍 Scan Sekarang";
+      refresh();
+    });
+
+    document.getElementById("manual-buy-btn").addEventListener("click", async () => {
+      const modeText = latestState && latestState.config.mode === "live" ? "LIVE (UANG REAL)" : "PAPER TRADING";
+      if (!confirm(`Buka posisi BUY manual sekarang dalam mode ${modeText}?`)) return;
+      const res = await post("/api/manual-buy");
+      if (!res.ok) alert(res.message || "Gagal BUY manual.");
+      refresh();
+    });
+
+    document.getElementById("close-pos-btn").addEventListener("click", async () => {
+      if (!confirm("Jual posisi spot yang sedang aktif sekarang?")) return;
+      await post("/api/close-position");
+      refresh();
+    });
+
+    document.getElementById("reset-paper-btn").addEventListener("click", async () => {
+      if (!confirm("Reset saldo & riwayat Paper Trading?")) return;
+      await post("/api/reset-paper");
+      refresh();
+    });
+
+    document.getElementById("test-ai-btn").addEventListener("click", async () => {
+      setToast("⏳ Mengetes koneksi AI (untuk Railway/Ollama bisa memakan 5-30 detik saat cold start)...");
+      const res = await post("/api/test-ai", {
+        aiProvider: document.getElementById("cfg-ai-provider").value,
+        aiModel: document.getElementById("cfg-ai-model").value.trim(),
+        aiApiKey: document.getElementById("cfg-ai-key").value.trim(),
+        aiEndpoint: document.getElementById("cfg-ai-endpoint").value.trim()
+      });
+      if (res.ok) {
+        if (res.endpoint) document.getElementById("cfg-ai-endpoint").value = res.endpoint;
+        if (res.model) document.getElementById("cfg-ai-model").value = res.model;
+        setToast("✅ " + res.message);
+      } else {
+        setToast("❌ " + res.message);
+      }
+      refresh();
+    });
+
+    document.getElementById("test-tc-btn").addEventListener("click", async () => {
+      setToast("Mengecek koneksi & saldo Spot Tokocrypto...");
+      const res = await post("/api/test-tokocrypto", {
+        apiKey: document.getElementById("cfg-tc-key").value.trim(),
+        apiSecret: document.getElementById("cfg-tc-secret").value.trim()
+      });
+      setToast(res.ok ? "✅ " + res.message : "❌ " + res.message);
+      refresh();
+    });
+
+    document.getElementById("test-discord-btn").addEventListener("click", async () => {
+      setToast("Mengirim tes ke Discord...");
+      const res = await post("/api/test-discord", {
+        webhookUrl: document.getElementById("cfg-discord-url").value.trim()
+      });
+      setToast(res.ok ? "✅ " + res.message : "❌ " + res.message);
+    });
+
+    document.getElementById("save-cfg-btn").addEventListener("click", async () => {
+      const payload = {
+        mode: document.getElementById("cfg-mode").value,
+        symbol: document.getElementById("cfg-symbol").value.trim().toUpperCase(),
+        interval: document.getElementById("cfg-interval").value,
+        orderSizeQuote: Number(document.getElementById("cfg-order-size").value) || 100,
+        stopLossPct: Number(document.getElementById("cfg-sl").value) || 1.5,
+        takeProfitPct: Number(document.getElementById("cfg-tp").value) || 3.0,
+        trailingActivatePct: Number(document.getElementById("cfg-trail-act").value) || 1.5,
+        trailingStopPct: Number(document.getElementById("cfg-trail-pct").value) || 0.8,
+        minConfidence: Number(document.getElementById("cfg-min-conf").value) || 70,
+        maxDailyLossPct: Number(document.getElementById("cfg-max-daily").value) || 5.0,
+        aiProvider: document.getElementById("cfg-ai-provider").value,
+        aiModel: document.getElementById("cfg-ai-model").value.trim(),
+        aiApiKey: document.getElementById("cfg-ai-key").value.trim(),
+        aiEndpoint: document.getElementById("cfg-ai-endpoint").value.trim(),
+        discordWebhookUrl: document.getElementById("cfg-discord-url").value.trim(),
+        tokocryptoApiKey: document.getElementById("cfg-tc-key").value.trim(),
+        tokocryptoApiSecret: document.getElementById("cfg-tc-secret").value.trim(),
+        smtpHost: document.getElementById("cfg-smtp-host").value.trim(),
+        smtpPort: Number(document.getElementById("cfg-smtp-port").value) || 465,
+        smtpUser: document.getElementById("cfg-smtp-user").value.trim(),
+        smtpPass: document.getElementById("cfg-smtp-pass").value.trim(),
+        smtpTo: document.getElementById("cfg-smtp-to").value.trim()
+      };
+      await post("/api/config", payload);
+      setToast("✅ Pengaturan tersimpan.");
+      refresh();
+    });
+
+    document.getElementById("test-smtp-btn").addEventListener("click", async () => {
+      setToast("Mengirim email tes SMTP...");
+      const res = await post("/api/test-smtp", {
+        smtpHost: document.getElementById("cfg-smtp-host").value.trim(),
+        smtpPort: Number(document.getElementById("cfg-smtp-port").value) || 465,
+        smtpUser: document.getElementById("cfg-smtp-user").value.trim(),
+        smtpPass: document.getElementById("cfg-smtp-pass").value.trim(),
+        smtpTo: document.getElementById("cfg-smtp-to").value.trim()
+      });
+      setToast(res.ok ? "✅ " + res.message : "❌ " + res.message);
+    });
+
+    document.getElementById("reset-pin-btn").addEventListener("click", async () => {
+      if (!confirm("Yakin ingin mereset PIN saat ini? PIN baru akan langsung di-generate dan dikirim ke email.")) return;
+      setToast("Mereset PIN & mengirim email...");
+      const res = await post("/api/auth/reset-pin", {
+        reason: "Reset manual dari Pengaturan Web",
+        email: document.getElementById("cfg-smtp-to").value.trim() || document.getElementById("cfg-smtp-user").value.trim()
+      });
+      if (res.ok) {
+        setToast("✅ PIN baru: " + res.newPin + (res.emailSent ? " (Telah dikirim ke email)" : ""));
+        refresh();
+      } else {
+        setToast("❌ " + res.message);
+      }
+    });
+
+    function fillSettings(cfg) {
+      document.getElementById("cfg-mode").value = cfg.mode;
+      document.getElementById("cfg-symbol").value = cfg.symbol;
+      document.getElementById("cfg-interval").value = cfg.interval;
+      document.getElementById("cfg-order-size").value = cfg.orderSizeQuote;
+      document.getElementById("cfg-sl").value = cfg.stopLossPct;
+      document.getElementById("cfg-tp").value = cfg.takeProfitPct;
+      document.getElementById("cfg-trail-act").value = cfg.trailingActivatePct;
+      document.getElementById("cfg-trail-pct").value = cfg.trailingStopPct;
+      document.getElementById("cfg-min-conf").value = cfg.minConfidence;
+      document.getElementById("cfg-max-daily").value = cfg.maxDailyLossPct;
+      document.getElementById("cfg-ai-provider").value = cfg.aiProvider;
+      document.getElementById("cfg-ai-model").value = cfg.aiModel;
+      document.getElementById("cfg-ai-key").value = cfg.aiApiKey || "";
+      document.getElementById("cfg-ai-endpoint").value = cfg.aiEndpoint || "";
+      document.getElementById("cfg-discord-url").value = cfg.discordWebhookUrl || "";
+      document.getElementById("cfg-tc-key").value = cfg.tokocryptoApiKey || "";
+      document.getElementById("cfg-tc-secret").value = cfg.tokocryptoApiSecret || "";
+      document.getElementById("cfg-smtp-host").value = cfg.smtpHost || "";
+      document.getElementById("cfg-smtp-port").value = cfg.smtpPort || 465;
+      document.getElementById("cfg-smtp-user").value = cfg.smtpUser || "";
+      document.getElementById("cfg-smtp-pass").value = cfg.smtpPass || "";
+      document.getElementById("cfg-smtp-to").value = cfg.smtpTo || "";
+    }
+
+    async function refresh() {
+      const modal = document.getElementById("pin-modal");
+      if (modal && !modal.classList.contains("hidden")) {
+        return;
+      }
+      if (!authToken) {
+        showPinModal();
+        return;
+      }
+
+      try {
+        const resp = await fetch("/api/state", { headers: getAuthHeaders() });
+        if (resp.status === 401) {
+          showPinModal("Sesi berakhir atau PIN diperlukan.");
+          return;
+        }
+        const s = await resp.json();
+        latestState = s;
+
+        if (s.auth) {
+          document.getElementById("pin-status-text").textContent =
+            `PIN: Login ${s.auth.usedCount}/${s.auth.maxUses} (Sisa ${s.auth.remainingUses}x)`;
+          document.getElementById("cfg-pin-counter").textContent =
+            `Login ${s.auth.usedCount} dari ${s.auth.maxUses} kali`;
+          document.getElementById("cfg-pin-remaining").textContent =
+            `${s.auth.remainingUses} kali lagi`;
+          if (s.auth.currentPin) {
+            activePinCached = s.auth.currentPin;
+            document.getElementById("cfg-display-pin").textContent = isPinRevealed ? activePinCached : "••••••";
+          }
+        }
+        const cfg = s.config;
+        document.getElementById("chart-title").textContent = `Grafik Candlestick Live — ${cfg.symbol} (${cfg.interval})`;
+        drawCandleChart(s);
+        if (!settingsLoaded) {
+          fillSettings(cfg);
+          settingsLoaded = true;
+        }
+
+        const pill = document.getElementById("mode-pill");
+        pill.textContent = cfg.mode === "live" ? "LIVE TRADING" : "PAPER TRADING";
+        pill.classList.toggle("live", cfg.mode === "live");
+
+        const toggleBtn = document.getElementById("toggle-btn");
+        toggleBtn.textContent = s.running ? "⏹ STOP" : "▶ JALANKAN";
+        toggleBtn.className = s.running ? "danger" : "success";
+
+        const alertEl = document.getElementById("guard-alert");
+        if (s.aiGuard && s.aiGuard.locked) {
+          const rem = Math.max(0, Math.ceil((s.aiGuard.retryAt - Date.now()) / 1000));
+          alertEl.textContent = `🛡️ BID DIHENTIKAN (Issue AI): ${s.aiGuard.reason} — Cek ulang otomatis dalam ${rem}s (TP/SL posisi aktif tetap berjalan).`;
+          alertEl.classList.remove("hidden");
+        } else {
+          alertEl.classList.add("hidden");
+        }
+
+        const fmt = (n, d = 2) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+        const fmtRp = (n) => "Rp " + Math.round(Number(n || 0)).toLocaleString("id-ID");
+        const qCur = s.quoteCurrency || "USDT";
+
+        document.getElementById("sym-label").textContent = `Harga Live (${cfg.symbol} • ${cfg.interval})`;
+        document.getElementById("live-price").textContent = s.lastPrice ? Number(s.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 4 }) : "--";
+        document.getElementById("price-meta").textContent = `Sumber: ${s.priceSource} • Update: ${s.lastUpdatedAt ? new Date(s.lastUpdatedAt).toLocaleTimeString() : "-"}`;
+
+        const activeBal = s.activeCashQuote !== undefined ? s.activeCashQuote : s.paperBalance;
+        document.getElementById("balance-val").textContent = `${fmt(activeBal)} ${qCur}`;
+        document.getElementById("balance-idr").textContent = `Total Ekuitas: ≈ ${fmtRp(s.totalEquityIdr)} (Kas: ${fmtRp(s.cashIdr)})`;
+        const dp = document.getElementById("daily-pnl");
+        dp.textContent = `PnL Harian: ${s.dailyPnlQuote >= 0 ? "+" : ""}${fmt(s.dailyPnlQuote)} ${qCur} (${s.dailyPnlIdr >= 0 ? "+" : ""}${fmtRp(s.dailyPnlIdr)})`;
+        dp.className = "sub " + (s.dailyPnlQuote >= 0 ? "up" : "down");
+
+        // Kotak lama Posisi Spot Aktif tetap bersih seperti semula
+        const posEl = document.getElementById("pos-status");
+        const posDet = document.getElementById("pos-detail");
+        const buyBtn = document.getElementById("manual-buy-btn");
+        const closeBtn = document.getElementById("close-pos-btn");
+        if (s.position) {
+          const p = s.position;
+          posEl.textContent = `${p.unrealizedPct >= 0 ? "+" : ""}${p.unrealizedPct.toFixed(2)}%`;
+          posEl.className = "big " + (p.unrealizedPct >= 0 ? "up" : "down");
+          posDet.textContent = `Entry ${p.entryPrice} | SL ${p.stopLossPrice.toFixed(2)}${p.trailingActive ? " (Trail)" : ""} | TP ${p.takeProfitPrice.toFixed(2)}`;
+          buyBtn.classList.add("hidden");
+          closeBtn.classList.remove("hidden");
+        } else {
+          posEl.textContent = "KOSONG";
+          posEl.className = "big";
+          posDet.textContent = "Menunggu sinyal BUY valid";
+          buyBtn.classList.remove("hidden");
+          closeBtn.classList.add("hidden");
+        }
+
+        // Kotak Baru: Perbandingan Entry vs Sekarang & Rupiah
+        document.getElementById("cmp-rate-info").textContent =
+          qCur === "IDR" || qCur === "BIDR"
+            ? "Mata uang pasangan: IDR"
+            : `Kurs konversi live: 1 ${qCur} ≈ ${fmtRp(s.idrRate)}`;
+        document.getElementById("cmp-cash").textContent = `${fmt(activeBal)} ${qCur} (${fmtRp(s.cashIdr)})`;
+        document.getElementById("cmp-equity").textContent = `${fmt(s.totalEquityQuote)} ${qCur}`;
+        document.getElementById("cmp-equity-idr").textContent = fmtRp(s.totalEquityIdr);
+
+        const badgeBox = document.getElementById("cmp-state-badge");
+        if (s.position) {
+          const p = s.position;
+          const isUp = p.unrealizedQuote >= 0;
+          const sign = isUp ? "+" : "";
+          const pSign = p.priceDiff >= 0 ? "+" : "";
+          const stateLabel = p.pnlState || (isUp ? "UNTUNG" : "RUGI");
+
+          badgeBox.innerHTML = `<span class="pos-badge ${isUp ? "up" : "down"}">${stateLabel} ${sign}${p.unrealizedPct.toFixed(2)}% (${sign}${fmtRp(p.unrealizedIdr)})</span>`;
+          document.getElementById("cmp-entry-price").textContent = `${fmt(p.entryPrice)} ${qCur}`;
+          document.getElementById("cmp-cur-price").textContent = `${fmt(p.currentPrice)} ${qCur}`;
+          const diffEl = document.getElementById("cmp-price-diff");
+          diffEl.textContent = `${pSign}${fmt(p.priceDiff)} ${qCur} (${pSign}${p.priceDiffPct.toFixed(2)}%)`;
+          diffEl.className = p.priceDiff >= 0 ? "up" : "down";
+
+          document.getElementById("cmp-cost").textContent = `${fmt(p.costQuote)} ${qCur} (${fmtRp(p.costIdr)})`;
+          document.getElementById("cmp-cur-val").textContent = `${fmt(p.currentValueQuote)} ${qCur} (${fmtRp(p.currentValueIdr)})`;
+          const netEl = document.getElementById("cmp-net-pnl");
+          netEl.textContent = `${stateLabel} ${sign}${fmt(p.unrealizedQuote)} ${qCur} (${sign}${p.unrealizedPct.toFixed(2)}% / ${sign}${fmtRp(p.unrealizedIdr)})`;
+          netEl.className = isUp ? "up" : "down";
+        } else {
+          badgeBox.innerHTML = `<span class="tag" style="background:rgba(148,163,184,0.18);color:#cbd5e1;">BELUM ADA POSISI AKTIF</span>`;
+          document.getElementById("cmp-entry-price").textContent = "--";
+          document.getElementById("cmp-cur-price").textContent = s.lastPrice ? `${fmt(s.lastPrice)} ${qCur}` : "--";
+          const diffEl = document.getElementById("cmp-price-diff");
+          diffEl.textContent = "--";
+          diffEl.className = "";
+          document.getElementById("cmp-cost").textContent = "--";
+          document.getElementById("cmp-cur-val").textContent = "--";
+          const netEl = document.getElementById("cmp-net-pnl");
+          netEl.textContent = "Menunggu posisi BUY";
+          netEl.className = "";
+        }
+
+        const ai = s.lastAiDecision;
+        if (ai) {
+          document.getElementById("ai-decision").textContent = `${ai.decision} (${ai.combinedScore || ai.confidence || 0}%)`;
+          document.getElementById("ai-reason").textContent = ai.reason || "-";
+        }
+
+        const an = s.lastAnalysis;
+        if (an && an.ready) {
+          document.getElementById("ind-trend").textContent = an.trend.replace(/_/g, " ");
+          document.getElementById("ind-setup").textContent = `Setup: ${an.proposal} ${an.setupType} (${an.score})`;
+          document.getElementById("ind-rsi").textContent = an.rsi.toFixed(1);
+          document.getElementById("ind-candle").textContent = `Candle: ${an.candleColor} (${an.rejection})`;
+          document.getElementById("ind-bb").textContent = an.bollinger ? `%B ${(an.bollinger.percentB * 100).toFixed(0)}%` : "-";
+          document.getElementById("ind-er").textContent = `Efficiency Ratio: ${an.er.toFixed(2)}`;
+          document.getElementById("ind-vol").textContent = `${an.volRatio.toFixed(2)}x avg`;
+          document.getElementById("ind-atr").textContent = `ATR: ${an.atrPct.toFixed(2)}%`;
+        }
+
+        const logsBox = document.getElementById("logs-box");
+        logsBox.innerHTML = "";
+        for (const l of s.logs || []) {
+          const div = document.createElement("div");
+          div.className = l.level === "error" ? "log-error" : l.level === "warn" ? "log-warn" : "";
+          div.textContent = `[${l.time}] ${l.msg}`;
+          logsBox.appendChild(div);
+        }
+
+        const wins = (s.history || []).filter((h) => h.status === "WIN").length;
+        const total = (s.history || []).length;
+        const totalPnl = (s.history || []).reduce((a, b) => a + (b.pnlQuote || 0), 0);
+        document.getElementById("hist-stats").textContent =
+          `Total: ${total} trade (${wins}W / ${total - wins}L • Winrate ${total ? Math.round((wins / total) * 100) : 0}%) • Total PnL: ${totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}`;
+
+        const tbody = document.getElementById("hist-body");
+        tbody.innerHTML = "";
+        for (const h of s.history || []) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${h.time} → ${h.exitTime}</td>
+            <td>${h.symbol}</td>
+            <td>${h.mode.toUpperCase()}</td>
+            <td>${h.entryPrice} → ${h.exitPrice}</td>
+            <td>${h.reason}</td>
+            <td class="${h.pnlQuote >= 0 ? "up" : "down"}">${h.pnlQuote >= 0 ? "+" : ""}${h.pnlQuote.toFixed(2)} (${h.pnlPct.toFixed(2)}%)</td>
+            <td><span class="tag ${h.status}">${h.status}</span></td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } catch (_) {}
+    }
+
+    if (!authToken) {
+      showPinModal();
+    } else {
+      refresh();
+    }
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>

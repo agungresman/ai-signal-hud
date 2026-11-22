@@ -1,0 +1,10 @@
+{
+  "name": "tokocrypto-ai-bot",
+  "version": "1.0.0",
+  "description": "Tokocrypto AI Spot Trading Bot (Zero-Dependency Node.js + Web Dashboard)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}

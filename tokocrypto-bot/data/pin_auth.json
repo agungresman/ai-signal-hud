@@ -1,0 +1,23 @@
+{
+  "currentPin": "123456",
+  "usedCount": 1,
+  "maxUses": 10,
+  "createdAt": "2026-11-22T06:08:00.000Z",
+  "lastRotatedAt": "2026-11-22T11:30:55.095Z",
+  "totalLogins": 2,
+  "sessions": {
+    "c3b48267869a52a12d4f1a5b3f19272f0dcdb692880b921bf49bdc647048441b": {
+      "createdAt": 1795352694701,
+      "expiresAt": 1797944694701,
+      "ip": "127.0.0.1"
+    }
+  },
+  "history": [
+    {
+      "pin": "123456",
+      "usedCount": 0,
+      "rotatedAt": "2026-11-22T11:30:55.095Z",
+      "reason": "Testing reset"
+    }
+  ]
+}
