@@ -1,13 +1,13 @@
 {
-  "updatedAt": "2026-11-23T03:25:14.475Z",
-  "usdtIdrRate": 18317,
+  "updatedAt": "2026-11-23T05:42:50.404Z",
+  "usdtIdrRate": 18300,
   "summary": {
     "totalTrades": 6,
     "wins": 2,
     "losses": 4,
     "winratePct": 33.3,
     "totalPnlQuote": 1.532608981743337,
-    "totalPnlIdr": 28072.798718592705
+    "totalPnlIdr": 28046.74436590307
   },
   "trades": [
     {

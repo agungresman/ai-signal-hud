@@ -369,7 +369,21 @@ function resetDailyIfNeeded() {
   }
 }
 
+const recentNotifyCache = new Map();
+const busyTradeSymbols = new Set();
+let busyPriceCheck = false;
+
 function notify(payload) {
+  const key = `${payload?.kind || ""}|${payload?.title || ""}|${payload?.description || ""}`;
+  const now = Date.now();
+  const prevAt = recentNotifyCache.get(key) || 0;
+  if (now - prevAt < 10000) return;
+  recentNotifyCache.set(key, now);
+  if (recentNotifyCache.size > 50) {
+    for (const [k, ts] of recentNotifyCache.entries()) {
+      if (now - ts > 30000) recentNotifyCache.delete(k);
+    }
+  }
   sendDiscord(state.config, payload).catch((err) => {
     addLog(`Discord gagal: ${err.message}`, "warn");
   });
@@ -378,8 +392,11 @@ function notify(payload) {
 // ---------- Eksekusi BUY & SELL (Paper & Live) ----------
 async function openBuyPosition(symbol, price, analysis, aiDecision) {
   const sym = PARALLEL_SYMBOLS.includes(symbol) ? symbol : "BTCUSDT";
-  const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
-  if (bot.position) return false;
+  if (busyTradeSymbols.has(sym)) return false;
+  busyTradeSymbols.add(sym);
+  try {
+    const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
+    if (bot.position) return false;
   const cfg = state.config;
   const { base, quote } = splitSymbol(sym);
   const spendQuote = Number(cfg.orderSizeQuote) || 100;
@@ -445,14 +462,20 @@ async function openBuyPosition(symbol, price, analysis, aiDecision) {
       { name: "Setup", value: analysis.setupType, inline: true }
     ]
   });
-  return true;
+    return true;
+  } finally {
+    busyTradeSymbols.delete(sym);
+  }
 }
 
 async function closePosition(symbol, exitPrice, exitReason) {
   const sym = PARALLEL_SYMBOLS.includes(symbol) ? symbol : "BTCUSDT";
-  const bot = state.bots[sym];
-  const pos = bot ? bot.position : null;
-  if (!pos) return false;
+  if (busyTradeSymbols.has(sym)) return false;
+  busyTradeSymbols.add(sym);
+  try {
+    const bot = state.bots[sym];
+    const pos = bot ? bot.position : null;
+    if (!pos) return false;
   const cfg = state.config;
 
   let pnlQuote = 0;
@@ -526,9 +549,11 @@ async function closePosition(symbol, exitPrice, exitReason) {
       { name: "Saldo Paper", value: `${state.paperBalance.toFixed(2)} ${pos.quote}`, inline: true }
     ]
   });
-  return true;
+    return true;
+  } finally {
+    busyTradeSymbols.delete(sym);
+  }
 }
-
 // ---------- Monitor Harga & TP / SL / Trailing Stop (Tiap 10 Detik, Paralel 3 Pair) ----------
 async function checkBotPriceAndRisk(sym) {
   const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
@@ -580,9 +605,15 @@ async function checkBotPriceAndRisk(sym) {
 }
 
 async function checkPriceAndRisk() {
-  refreshUsdtIdrRate();
-  refreshLiveBalanceIfNeeded(false);
-  await Promise.allSettled(PARALLEL_SYMBOLS.map((sym) => checkBotPriceAndRisk(sym)));
+  if (busyPriceCheck) return;
+  busyPriceCheck = true;
+  try {
+    refreshUsdtIdrRate();
+    refreshLiveBalanceIfNeeded(false);
+    await Promise.allSettled(PARALLEL_SYMBOLS.map((sym) => checkBotPriceAndRisk(sym)));
+  } finally {
+    busyPriceCheck = false;
+  }
 }
 
 // ---------- Scanner Strategi & AI Validator (Paralel 3 Pair: BTC, ETH, SOL) ----------
@@ -909,6 +940,24 @@ const server = http.createServer(async (req, res) => {
     return res.end(fs.readFileSync(PUBLIC_HTML, "utf8"));
   }
 
+  if (req.method === "GET" && urlPath === "/manifest.webmanifest") {
+    const p = path.join(__dirname, "public", "manifest.webmanifest");
+    res.writeHead(200, { "Content-Type": "application/manifest+json; charset=utf-8" });
+    return res.end(fs.readFileSync(p, "utf8"));
+  }
+
+  if (req.method === "GET" && urlPath === "/icon.svg") {
+    const p = path.join(__dirname, "public", "icon.svg");
+    res.writeHead(200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=86400" });
+    return res.end(fs.readFileSync(p, "utf8"));
+  }
+
+  if (req.method === "GET" && urlPath === "/sw.js") {
+    const p = path.join(__dirname, "public", "sw.js");
+    res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+    return res.end(fs.readFileSync(p, "utf8"));
+  }
+
   // --- Auth Endpoints (Tanpa Database) ---
   if (req.method === "POST" && urlPath === "/api/auth/login") {
     const body = await readBody(req);
@@ -1014,6 +1063,29 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && urlPath === "/api/state") {
     return sendJson(res, 200, sanitizeStateForClient(clientToken));
+  }
+
+  if (req.method === "GET" && urlPath === "/api/reports/download") {
+    saveReports();
+    const u = new URL(req.url, "http://localhost");
+    const type = String(u.searchParams.get("type") || "daily").toLowerCase();
+    const dateParam = String(u.searchParams.get("date") || "").trim();
+    let fileName = "rekap_harian.json";
+    if (type === "trade") {
+      fileName = "rekap_trade.json";
+    } else if (type === "today") {
+      const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : (state.dailyPnlDate || getLocalDateStr());
+      fileName = `harian_${targetDate}.json`;
+    }
+    const filePath = path.join(REPORTS_DIR, fileName);
+    if (!fs.existsSync(filePath)) {
+      return sendJson(res, 404, { ok: false, message: `File ${fileName} belum tersedia.` });
+    }
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${fileName}"`
+    });
+    return res.end(fs.readFileSync(filePath));
   }
 
   if (req.method === "POST" && urlPath === "/api/config") {
@@ -1173,9 +1245,18 @@ const server = http.createServer(async (req, res) => {
         reason: "Tes Koneksi Email SMTP dari Web Dashboard",
         recipient: testCfg.smtpTo
       });
+      // Otomatis simpan konfigurasi SMTP yang sudah teruji berhasil
+      state.config.smtpHost = testCfg.smtpHost;
+      state.config.smtpPort = testCfg.smtpPort;
+      state.config.smtpSecure = testCfg.smtpPort === 465;
+      state.config.smtpUser = testCfg.smtpUser;
+      state.config.smtpPass = testCfg.smtpPass;
+      state.config.smtpFrom = testCfg.smtpFrom;
+      state.config.smtpTo = testCfg.smtpTo;
+      saveState();
       return sendJson(res, 200, {
         ok: true,
-        message: `Email tes berhasil terkirim ke ${testCfg.smtpTo}! PIN saat ini dikirimkan.`
+        message: `Email tes berhasil terkirim ke ${testCfg.smtpTo} & konfigurasi SMTP otomatis disimpan!`
       });
     } catch (err) {
       return sendJson(res, 400, { ok: false, message: err.message });

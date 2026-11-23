@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-11-23T03:25:14.475Z",
-  "usdtIdrRate": 18317,
+  "updatedAt": "2026-11-23T05:43:30.268Z",
+  "usdtIdrRate": 18300,
   "summary": {
     "totalDays": 2,
     "achievedDays": 0,
     "totalTargetIdr": 900000,
-    "totalPnlIdr": -6070.391873236344,
+    "totalPnlIdr": -6041.691546349792,
     "totalPnlQuote": -0.33162252194834707,
     "totalTrades": 1,
     "totalWins": 0,
@@ -16,9 +16,9 @@
     {
       "date": "2026-11-23",
       "targetIdr": 500000,
-      "targetQuote": 27.29108673107363,
+      "targetQuote": 27.334353815875794,
       "pnlQuote": -0.9896664443638485,
-      "pnlIdr": -18131.67892719007,
+      "pnlIdr": -18102.97860030352,
       "trades": 1,
       "wins": 0,
       "losses": 1,

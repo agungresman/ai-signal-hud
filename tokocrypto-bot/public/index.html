@@ -2,7 +2,15 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1120" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TC AI Bot" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
   <title>Tokocrypto AI Spot Trading Bot</title>
   <style>
     :root {
@@ -218,6 +226,7 @@
         <div id="pin-badge-btn" class="pill" style="cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border-color:rgba(59,130,246,0.4);" title="Status PIN Keamanan">
           🔐 <span id="pin-status-text">PIN: Login --/10</span>
         </div>
+        <button id="install-app-btn" class="hidden" style="background:rgba(16,185,129,0.18);border-color:rgba(16,185,129,0.45);color:#6ee7b7;">📱 Pasang di HP</button>
         <button id="scan-btn" class="primary">🔍 Scan Sekarang</button>
         <button id="toggle-btn" class="danger">⏹ STOP</button>
         <button id="logout-btn" style="background:#1e293b;border-color:#334155;color:#94a3b8;" title="Kunci Dashboard (Logout)">🔒</button>
@@ -354,9 +363,12 @@
     <!-- RIWAYAT -->
     <div id="tab-history" class="hidden">
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
           <div id="hist-stats" style="font-weight:700;">Belum ada transaksi selesai.</div>
-          <button id="reset-paper-btn">Reset Saldo & Riwayat Paper</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="dl-trade-btn" class="primary">⬇️ Download JSON Trade</button>
+            <button id="reset-paper-btn">Reset Saldo & Riwayat Paper</button>
+          </div>
         </div>
         <table>
           <thead>
@@ -374,7 +386,10 @@
       <div class="card">
         <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
           <div id="daily-stats" style="font-weight:700;">Belum ada data rekap harian.</div>
-          <div class="sub" style="margin-top:0;">Target harian dapat diatur di tab Pengaturan</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="dl-daily-btn" class="primary">⬇️ Download JSON Harian</button>
+            <button type="button" id="dl-today-btn">⬇️ Download Hari Ini</button>
+          </div>
         </div>
         <table>
           <thead>
@@ -599,9 +614,11 @@
             </div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
-            <button id="test-smtp-btn">📧 Tes Kirim Email SMTP</button>
-            <button id="reset-pin-btn" style="background:#ef4444;border-color:#b91c1c;color:#fff;">🔄 Reset PIN Sekarang & Kirim ke Email</button>
+            <button type="button" id="save-smtp-btn" class="primary">💾 Simpan SMTP</button>
+            <button type="button" id="test-smtp-btn">📧 Tes Kirim Email SMTP</button>
+            <button type="button" id="reset-pin-btn" style="background:#ef4444;border-color:#b91c1c;color:#fff;">🔄 Reset PIN Sekarang & Kirim ke Email</button>
           </div>
+          <div id="smtp-toast" style="margin-top:10px;font-size:12px;font-weight:600;"></div>
         </div>
       </div>
     </div>
@@ -1253,6 +1270,34 @@
       refresh();
     });
 
+    async function downloadReport(type, defaultName) {
+      const r = await fetch(`/api/reports/download?type=${encodeURIComponent(type)}`, { headers: getAuthHeaders() });
+      if (r.status === 401) {
+        showPinModal("Sesi berakhir atau PIN diperlukan.");
+        return;
+      }
+      if (!r.ok) {
+        alert("Gagal mengunduh file laporan.");
+        return;
+      }
+      const disp = r.headers.get("Content-Disposition") || "";
+      const match = disp.match(/filename="([^"]+)"/);
+      const fileName = match ? match[1] : defaultName;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("dl-trade-btn").addEventListener("click", () => downloadReport("trade", "rekap_trade.json"));
+    document.getElementById("dl-daily-btn").addEventListener("click", () => downloadReport("daily", "rekap_harian.json"));
+    document.getElementById("dl-today-btn").addEventListener("click", () => downloadReport("today", "harian_hari_ini.json"));
+
     document.getElementById("reset-paper-btn").addEventListener("click", async () => {
       if (!confirm("Reset saldo & riwayat Paper Trading?")) return;
       await post("/api/reset-paper");
@@ -1345,8 +1390,35 @@
       refresh();
     });
 
+    function setSmtpToast(msg) {
+      const el = document.getElementById("smtp-toast");
+      if (el) el.textContent = msg;
+    }
+
+    document.getElementById("save-smtp-btn").addEventListener("click", async () => {
+      setSmtpToast("Menyimpan konfigurasi SMTP...");
+      const smtpUser = document.getElementById("cfg-smtp-user").value.trim();
+      const payload = {
+        smtpHost: document.getElementById("cfg-smtp-host").value.trim(),
+        smtpPort: Number(document.getElementById("cfg-smtp-port").value) || 465,
+        smtpUser,
+        smtpPass: document.getElementById("cfg-smtp-pass").value.trim(),
+        smtpFrom: smtpUser,
+        smtpTo: document.getElementById("cfg-smtp-to").value.trim() || smtpUser
+      };
+      const res = await post("/api/config", payload);
+      if (res && res.ok) {
+        if (res.config) fillSettings(res.config);
+        setSmtpToast("✅ Konfigurasi SMTP tersimpan permanen.");
+        setToast("✅ Konfigurasi SMTP tersimpan.");
+      } else {
+        setSmtpToast("❌ Gagal menyimpan konfigurasi SMTP.");
+      }
+      refresh();
+    });
+
     document.getElementById("test-smtp-btn").addEventListener("click", async () => {
-      setToast("Mengirim email tes SMTP...");
+      setSmtpToast("Mengirim email tes SMTP...");
       const res = await post("/api/test-smtp", {
         smtpHost: document.getElementById("cfg-smtp-host").value.trim(),
         smtpPort: Number(document.getElementById("cfg-smtp-port").value) || 465,
@@ -1354,7 +1426,10 @@
         smtpPass: document.getElementById("cfg-smtp-pass").value.trim(),
         smtpTo: document.getElementById("cfg-smtp-to").value.trim()
       });
-      setToast(res.ok ? "✅ " + res.message : "❌ " + res.message);
+      const msg = res.ok ? "✅ " + res.message : "❌ " + res.message;
+      setSmtpToast(msg);
+      setToast(msg);
+      if (res.ok) refresh();
     });
 
     document.getElementById("reset-pin-btn").addEventListener("click", async () => {
@@ -1785,6 +1860,27 @@
         document.getElementById("ind-vol").textContent = "--";
         document.getElementById("ind-atr").textContent = "ATR: --";
       }
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+
+    let deferredInstallPrompt = null;
+    const installBtn = document.getElementById("install-app-btn");
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (installBtn) installBtn.classList.remove("hidden");
+    });
+    if (installBtn) {
+      installBtn.addEventListener("click", async () => {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        installBtn.classList.add("hidden");
+      });
     }
 
     if (!authToken) {
