@@ -1,0 +1,33 @@
+{
+  "updatedAt": "2026-11-23T03:24:44.659Z",
+  "date": "2026-11-23",
+  "usdtIdrRate": 18317,
+  "daily": {
+    "date": "2026-11-23",
+    "targetIdr": 500000,
+    "targetQuote": 27.29108673107363,
+    "pnlQuote": -0.9896664443638485,
+    "pnlIdr": -18131.67892719007,
+    "trades": 1,
+    "wins": 0,
+    "losses": 1,
+    "achieved": false
+  },
+  "trades": [
+    {
+      "time": "22/11/2026 20:00:48",
+      "exitTime": "23/11/2026 09:44:19",
+      "entryTimestamp": 1795352448815,
+      "exitTimestamp": 1795401859713,
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 60900.41,
+      "exitPrice": 60479,
+      "qty": 0.0016395620325051997,
+      "pnlQuote": -0.9896664443638485,
+      "pnlPct": -0.9896664443638484,
+      "reason": "TREND_BREAK_EXIT",
+      "status": "LOSS"
+    }
+  ]
+}

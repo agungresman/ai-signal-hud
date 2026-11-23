@@ -46,7 +46,7 @@
     button.primary { background: linear-gradient(135deg, #0284c7, #2563eb); border-color: transparent; color: #fff; }
     button.danger { background: #e11d48; border-color: transparent; color: #fff; }
     button.success { background: #059669; border-color: transparent; color: #fff; }
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
     .tab { padding: 8px 14px; border-radius: 8px; background: var(--card); color: var(--muted); }
     .tab.active { background: rgba(56, 189, 248, 0.16); color: var(--blue); border-color: rgba(56, 189, 248, 0.45); }
     .hidden { display: none !important; }
@@ -212,6 +212,7 @@
       <div class="brand">
         <h1>Tokocrypto AI Spot Bot</h1>
         <span class="pill" id="mode-pill">PAPER TRADING</span>
+        <span class="pill" id="kurs-pill" style="background:rgba(16,185,129,0.14);color:#6ee7b7;border-color:rgba(16,185,129,0.38);" title="Kurs USD/IDR diperbarui tiap 5 menit">💵 USD/IDR: --</span>
       </div>
       <div class="actions">
         <div id="pin-badge-btn" class="pill" style="cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border-color:rgba(59,130,246,0.4);" title="Status PIN Keamanan">
@@ -225,10 +226,16 @@
 
     <div id="guard-alert" class="alert hidden"></div>
 
-    <div class="tabs">
-      <button class="tab active" data-tab="dash">Dashboard</button>
-      <button class="tab" data-tab="history">Riwayat Trade</button>
+    <div class="tabs" id="main-tabs">
+      <button class="tab active" data-tab="dash" data-pair="BTCUSDT">Dashboard BTC <span id="ptab-BTCUSDT" style="margin-left:4px;font-size:11px;font-weight:700;">--</span></button>
+      <button class="tab" data-tab="dash" data-pair="ETHUSDT">Dashboard ETH <span id="ptab-ETHUSDT" style="margin-left:4px;font-size:11px;font-weight:700;">--</span></button>
+      <button class="tab" data-tab="dash" data-pair="SOLUSDT">Dashboard SOL <span id="ptab-SOLUSDT" style="margin-left:4px;font-size:11px;font-weight:700;">--</span></button>
+      <button class="tab" data-tab="history">Rekap Trade</button>
+      <button class="tab" data-tab="daily">Rekap Harian</button>
       <button class="tab" data-tab="settings">Pengaturan</button>
+      <span class="pill" id="parallel-summary" style="margin-left:auto;background:rgba(56,189,248,0.12);color:#bae6fd;border-color:rgba(56,189,248,0.35);">
+        3 Pair Paralel • 0/3 Posisi Aktif
+      </span>
     </div>
 
     <!-- DASHBOARD -->
@@ -244,6 +251,10 @@
           <div class="big" id="balance-val">--</div>
           <div class="sub" id="balance-idr" style="color:#e2e8f0;font-weight:600;">≈ Rp --</div>
           <div class="sub" id="daily-pnl">PnL Harian: --</div>
+          <div class="sub" id="daily-target-status" style="margin-top:6px;">Target Harian: --</div>
+          <div style="height:5px;border-radius:999px;background:rgba(148,163,184,0.18);overflow:hidden;margin-top:5px;">
+            <div id="daily-target-bar" style="height:100%;width:0%;background:#38bdf8;transition:width 0.3s;"></div>
+          </div>
         </div>
         <div class="card">
           <div class="label">Posisi Spot Aktif</div>
@@ -298,12 +309,14 @@
             <div class="label" style="margin-bottom:2px;" id="chart-title">Grafik Candlestick Live</div>
             <div id="chart-ohlc">Arahkan kursor ke candle untuk melihat O / H / L / C</div>
           </div>
-          <div class="chart-legend">
+          <div class="chart-legend" style="align-items:center;">
             <span><span class="legend-dot" style="background:#f59e0b"></span>EMA 9</span>
             <span><span class="legend-dot" style="background:#38bdf8"></span>EMA 21</span>
             <span><span class="legend-dot" style="background:rgba(148,163,184,0.7)"></span>Bollinger (20,2)</span>
             <span><span class="legend-dot" style="background:#10b981"></span>TP</span>
             <span><span class="legend-dot" style="background:#f43f5e"></span>SL</span>
+            <span id="chart-zoom-info" style="color:#cbd5e1;font-family:ui-monospace,Menlo,monospace;">Scroll: Zoom • Drag: Geser</span>
+            <button id="chart-reset-zoom" class="hidden" style="padding:3px 8px;font-size:11px;">Reset Zoom</button>
           </div>
         </div>
         <canvas id="candle-canvas"></canvas>
@@ -356,8 +369,85 @@
       </div>
     </div>
 
+    <!-- REKAP HARIAN -->
+    <div id="tab-daily" class="hidden">
+      <div class="card">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+          <div id="daily-stats" style="font-weight:700;">Belum ada data rekap harian.</div>
+          <div class="sub" style="margin-top:0;">Target harian dapat diatur di tab Pengaturan</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Tanggal</th><th>Target Harian</th><th>Pendapatan</th><th>Trade (W/L)</th><th>Capaian</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="daily-body"></tbody>
+          <tfoot id="daily-foot"></tfoot>
+        </table>
+      </div>
+    </div>
+
     <!-- PENGATURAN -->
     <div id="tab-settings" class="hidden">
+      <!-- SIMULASI KALKULATOR MODAL & TARGET HARIAN (TERPISAH) -->
+      <div class="card" style="margin-bottom:14px;border-color:rgba(16,185,129,0.35);background:rgba(15,23,42,0.65);">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+          <div>
+            <div class="label" style="color:var(--green);margin-bottom:2px;">🧮 Simulasi Kalkulator Modal & Target Harian</div>
+            <div class="sub" style="margin-top:0;">Hitung kebutuhan modal, TP, SL, dan batas rugi harian tanpa mengubah pengaturan aktif sebelum Anda klik Terapkan.</div>
+          </div>
+          <button type="button" id="sim-apply-btn" class="success" style="padding:6px 12px;">✅ Terapkan Saran ke Pengaturan</button>
+        </div>
+
+        <div class="form-grid" style="margin-bottom:12px;">
+          <div class="field">
+            <label>Simulasi Target Profit / Hari (Rp)</label>
+            <input type="number" step="50000" id="sim-target-idr" value="500000" />
+          </div>
+          <div class="field">
+            <label>Mode Pair Paralel</label>
+            <select id="sim-pair-count">
+              <option value="3">3 Pair Paralel (BTC, ETH, SOL)</option>
+              <option value="1">1 Pair Tunggal</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Simulasi Take Profit (%)</label>
+            <input type="number" step="0.1" id="sim-tp" value="3.0" />
+          </div>
+          <div class="field">
+            <label>Simulasi Stop Loss (%)</label>
+            <input type="number" step="0.1" id="sim-sl" value="1.5" />
+          </div>
+          <div class="field">
+            <label>Simulasi Batas Rugi Harian (%)</label>
+            <input type="number" step="0.5" id="sim-max-daily" value="5.0" />
+          </div>
+        </div>
+
+        <div class="grid" style="margin-bottom:0;">
+          <div class="pos-compare" style="margin-top:0;">
+            <div class="label">Saran Modal (Order & Total Saldo)</div>
+            <div class="pos-row"><span>Order (Patungan 3 Pair):</span><strong id="sim-out-order-split" style="color:#34d399;">--</strong></div>
+            <div class="pos-row"><span>Order (1x TP = Target):</span><strong id="sim-out-order" style="color:#38bdf8;">--</strong></div>
+            <div class="pos-row"><span>Total Modal Aman:</span><strong id="sim-out-cons">--</strong></div>
+          </div>
+          <div class="pos-compare" style="margin-top:0;">
+            <div class="label">Estimasi per 1x Transaksi (Net Fee)</div>
+            <div class="pos-row"><span>Take Profit Bersih:</span><strong id="sim-out-tp" class="up">--</strong></div>
+            <div class="pos-row"><span>Stop Loss Bersih:</span><strong id="sim-out-sl" class="down">--</strong></div>
+            <div class="pos-row"><span>Risk : Reward Bersih:</span><strong id="sim-out-rr">--</strong></div>
+          </div>
+          <div class="pos-compare" style="margin-top:0;">
+            <div class="label">Batas Rugi & Ketahanan Risiko</div>
+            <div class="pos-row"><span>Max Rugi Harian:</span><strong id="sim-out-maxloss" class="down">--</strong></div>
+            <div class="pos-row"><span>Tahan SL Beruntun:</span><strong id="sim-out-streak">--</strong></div>
+            <div class="pos-row"><span>Kurs Acuan:</span><strong id="sim-out-rate">--</strong></div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="form-grid">
           <div class="field">
@@ -410,6 +500,10 @@
             <input type="number" step="0.5" id="cfg-max-daily" value="5.0" />
           </div>
           <div class="field">
+            <label>Target Profit Harian (Rp)</label>
+            <input type="number" step="10000" id="cfg-daily-target" value="300000" />
+          </div>
+          <div class="field">
             <label>Provider AI</label>
             <select id="cfg-ai-provider">
               <option value="ollama">Ollama Lokal (Gratis, 0 Limit)</option>
@@ -444,6 +538,7 @@
           </div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">
+          <button type="button" id="best-preset-btn" class="success">⭐ Terapkan Settingan Terbaik</button>
           <button id="test-ai-btn">🤖 Tes Koneksi AI (Ollama / Cloud)</button>
           <button id="test-tc-btn">🔑 Tes API & Saldo Tokocrypto</button>
           <button id="test-discord-btn">🧪 Tes Webhook Discord</button>
@@ -522,7 +617,14 @@
 
     let settingsLoaded = false;
     let latestState = null;
+    let activePair = "BTCUSDT";
     let hoverIndex = -1;
+    let hoverY = -1;
+    let chartViewCount = 60;
+    let chartViewOffset = 0; // 0 = terkunci di candle terbaru (kanan)
+    let isDraggingChart = false;
+    let dragStartX = 0;
+    let dragStartOffset = 0;
     let authToken = localStorage.getItem("tc_bot_token") || "";
     let activePinCached = "";
     let isPinRevealed = false;
@@ -742,9 +844,34 @@
       return { up, lo };
     }
 
+    function getChartWindow(totalLen) {
+      const viewCount = Math.max(10, Math.min(totalLen, chartViewCount));
+      const maxOffset = Math.max(0, totalLen - viewCount);
+      const offset = Math.max(0, Math.min(maxOffset, chartViewOffset));
+      const endIdx = totalLen - offset;
+      const startIdx = Math.max(0, endIdx - viewCount);
+      return { startIdx, endIdx, viewCount, offset, maxOffset };
+    }
+
+    function getActiveBot(s) {
+      if (!s) return null;
+      if (s.bots && s.bots[activePair]) return s.bots[activePair];
+      return {
+        symbol: s.config?.symbol || activePair,
+        lastPrice: s.lastPrice,
+        priceSource: s.priceSource,
+        lastUpdatedAt: s.lastUpdatedAt,
+        lastAnalysis: s.lastAnalysis,
+        lastAiDecision: s.lastAiDecision,
+        candles: s.candles || [],
+        position: s.position || null
+      };
+    }
+
     function drawCandleChart(s) {
       const canvas = document.getElementById("candle-canvas");
-      if (!canvas || !s || !Array.isArray(s.candles) || s.candles.length < 2) return;
+      const bot = getActiveBot(s);
+      if (!canvas || !bot || !Array.isArray(bot.candles) || bot.candles.length < 2) return;
 
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
@@ -762,23 +889,41 @@
       const volH = plotH * 0.18;
       const priceH = plotH - volH - 6;
 
-      const candles = s.candles;
-      const closes = candles.map((c) => c.close);
-      const ema9 = calcEma(closes, 9);
-      const ema21 = calcEma(closes, 21);
-      const bb = calcBB(closes, 20, 2);
+      const allCandles = bot.candles;
+      const allCloses = allCandles.map((c) => c.close);
+      const allEma9 = calcEma(allCloses, 9);
+      const allEma21 = calcEma(allCloses, 21);
+      const allBb = calcBB(allCloses, 20, 2);
+
+      const win = getChartWindow(allCandles.length);
+      chartViewOffset = win.offset;
+      const candles = allCandles.slice(win.startIdx, win.endIdx);
+      const ema9 = allEma9.slice(win.startIdx, win.endIdx);
+      const ema21 = allEma21.slice(win.startIdx, win.endIdx);
+      const bbUp = allBb.up.slice(win.startIdx, win.endIdx);
+      const bbLo = allBb.lo.slice(win.startIdx, win.endIdx);
+
+      const zoomInfoEl = document.getElementById("chart-zoom-info");
+      const resetBtn = document.getElementById("chart-reset-zoom");
+      if (zoomInfoEl) {
+        zoomInfoEl.textContent = `${candles.length}/${allCandles.length} candle${win.offset > 0 ? ` • -${win.offset}` : ""}`;
+      }
+      if (resetBtn) {
+        const isDefault = win.viewCount === Math.min(60, allCandles.length) && win.offset === 0;
+        resetBtn.classList.toggle("hidden", isDefault);
+      }
 
       let minP = Infinity, maxP = -Infinity, maxVol = 0;
       for (let i = 0; i < candles.length; i++) {
         if (candles[i].low < minP) minP = candles[i].low;
         if (candles[i].high > maxP) maxP = candles[i].high;
-        if (bb.lo[i] && bb.lo[i] < minP) minP = bb.lo[i];
-        if (bb.up[i] && bb.up[i] > maxP) maxP = bb.up[i];
+        if (bbLo[i] && bbLo[i] < minP) minP = bbLo[i];
+        if (bbUp[i] && bbUp[i] > maxP) maxP = bbUp[i];
         if (candles[i].volume > maxVol) maxVol = candles[i].volume;
       }
-      if (s.position) {
-        minP = Math.min(minP, s.position.stopLossPrice);
-        maxP = Math.max(maxP, s.position.takeProfitPrice);
+      if (bot.position) {
+        minP = Math.min(minP, bot.position.stopLossPrice);
+        maxP = Math.max(maxP, bot.position.takeProfitPrice);
       }
       const pPad = (maxP - minP) * 0.06 || 1;
       minP -= pPad;
@@ -786,8 +931,9 @@
       const pSpan = maxP - minP || 1;
 
       const mapY = (p) => padT + priceH * (1 - (p - minP) / pSpan);
+      const invY = (y) => maxP - ((y - padT) / priceH) * pSpan;
       const stepX = plotW / candles.length;
-      const barW = Math.max(3, Math.min(12, stepX * 0.65));
+      const barW = Math.max(2, Math.min(18, stepX * 0.65));
 
       ctx.clearRect(0, 0, W, H);
 
@@ -804,6 +950,21 @@
         ctx.lineTo(W - padR, y);
         ctx.stroke();
         ctx.fillText(val.toLocaleString("en-US", { maximumFractionDigits: 2 }), W - padR + 6, y + 3);
+      }
+
+      // Tick waktu di sumbu X (bawah)
+      const tickCount = Math.min(6, candles.length);
+      if (tickCount >= 2) {
+        ctx.fillStyle = "#64748b";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        for (let t = 0; t < tickCount; t++) {
+          const ci = Math.min(candles.length - 1, Math.round((t * (candles.length - 1)) / (tickCount - 1)));
+          const x = padL + ci * stepX + stepX / 2;
+          const lbl = new Date(candles[ci].openTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+          ctx.fillText(lbl, x, H - 6);
+        }
+        ctx.textAlign = "left";
       }
 
       // Volume bars
@@ -836,8 +997,8 @@
         ctx.restore();
       };
 
-      drawLine(bb.up, "rgba(148,163,184,0.45)", [3, 3]);
-      drawLine(bb.lo, "rgba(148,163,184,0.45)", [3, 3]);
+      drawLine(bbUp, "rgba(148,163,184,0.45)", [3, 3]);
+      drawLine(bbLo, "rgba(148,163,184,0.45)", [3, 3]);
       drawLine(ema21, "#38bdf8");
       drawLine(ema9, "#f59e0b");
 
@@ -879,20 +1040,20 @@
         ctx.restore();
       };
 
-      if (s.position) {
-        drawHLine(s.position.takeProfitPrice, "#10b981", `TP ${s.position.takeProfitPrice.toFixed(2)}`);
-        drawHLine(s.position.entryPrice, "#e2e8f0", `ENTRY ${s.position.entryPrice}`);
-        drawHLine(s.position.stopLossPrice, "#f43f5e", `${s.position.trailingActive ? "TRAIL" : "SL"} ${s.position.stopLossPrice.toFixed(2)}`);
+      if (bot.position) {
+        drawHLine(bot.position.takeProfitPrice, "#10b981", `TP ${bot.position.takeProfitPrice.toFixed(2)}`);
+        drawHLine(bot.position.entryPrice, "#e2e8f0", `ENTRY ${bot.position.entryPrice}`);
+        drawHLine(bot.position.stopLossPrice, "#f43f5e", `${bot.position.trailingActive ? "TRAIL" : "SL"} ${bot.position.stopLossPrice.toFixed(2)}`);
       }
 
       // Garis harga live saat ini
-      if (s.lastPrice) {
-        const yNow = mapY(s.lastPrice);
+      if (bot.lastPrice) {
+        const yNow = mapY(bot.lastPrice);
         ctx.fillStyle = "#0284c7";
         ctx.fillRect(W - padR + 2, yNow - 8, padR - 4, 16);
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 10px ui-monospace, Menlo, monospace";
-        ctx.fillText(Number(s.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }), W - padR + 5, yNow + 3);
+        ctx.fillText(Number(bot.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }), W - padR + 5, yNow + 3);
       }
 
       // Crosshair & OHLC info saat hover
@@ -906,40 +1067,128 @@
         ctx.beginPath();
         ctx.moveTo(hx, padT);
         ctx.lineTo(hx, H - padB);
+        if (hoverY >= padT && hoverY <= padT + priceH) {
+          ctx.moveTo(padL, hoverY);
+          ctx.lineTo(W - padR, hoverY);
+        }
         ctx.stroke();
+
+        // Badge harga crosshair di sumbu kanan
+        if (hoverY >= padT && hoverY <= padT + priceH) {
+          const hPrice = invY(hoverY);
+          ctx.fillStyle = "#334155";
+          ctx.fillRect(W - padR + 2, hoverY - 8, padR - 4, 16);
+          ctx.fillStyle = "#f8fafc";
+          ctx.font = "10px ui-monospace, Menlo, monospace";
+          ctx.fillText(hPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }), W - padR + 5, hoverY + 3);
+        }
         ctx.restore();
       }
-      const tStr = new Date(hc.openTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const dObj = new Date(hc.openTime);
+      const tStr = `${String(dObj.getDate()).padStart(2, "0")}/${String(dObj.getMonth() + 1).padStart(2, "0")} ${dObj.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
       document.getElementById("chart-ohlc").textContent =
         `${tStr}  O:${hc.open}  H:${hc.high}  L:${hc.low}  C:${hc.close}  Vol:${hc.volume.toFixed(2)}`;
     }
 
     const canvasEl = document.getElementById("candle-canvas");
-    canvasEl.addEventListener("mousemove", (e) => {
-      if (!latestState || !latestState.candles || latestState.candles.length === 0) return;
+    canvasEl.addEventListener("wheel", (e) => {
+      const bot = getActiveBot(latestState);
+      if (!bot || !bot.candles || bot.candles.length < 2) return;
+      e.preventDefault();
+      const total = bot.candles.length;
       const rect = canvasEl.getBoundingClientRect();
+      const plotW = Math.max(1, rect.width - 84);
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left - 10) / plotW));
+
+      const oldWin = getChartWindow(total);
+      const anchorIdx = oldWin.startIdx + ratio * oldWin.viewCount;
+
+      const factor = e.deltaY < 0 ? 0.85 : 1.18;
+      let nextCount = Math.round(oldWin.viewCount * factor);
+      if (nextCount === oldWin.viewCount) {
+        nextCount += e.deltaY < 0 ? -1 : 1;
+      }
+      nextCount = Math.max(10, Math.min(total, nextCount));
+
+      const nextStart = Math.round(anchorIdx - ratio * nextCount);
+      const clampedStart = Math.max(0, Math.min(total - nextCount, nextStart));
+      chartViewCount = nextCount;
+      chartViewOffset = total - (clampedStart + nextCount);
+      hoverIndex = Math.max(0, Math.min(nextCount - 1, Math.floor(ratio * nextCount)));
+      drawCandleChart(latestState);
+    }, { passive: false });
+
+    canvasEl.addEventListener("mousedown", (e) => {
+      const bot = getActiveBot(latestState);
+      if (!bot || !bot.candles || bot.candles.length < 2) return;
+      isDraggingChart = true;
+      dragStartX = e.clientX;
+      dragStartOffset = chartViewOffset;
+      canvasEl.style.cursor = "grabbing";
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (isDraggingChart) {
+        isDraggingChart = false;
+        canvasEl.style.cursor = "crosshair";
+      }
+    });
+
+    canvasEl.addEventListener("mousemove", (e) => {
+      const bot = getActiveBot(latestState);
+      if (!bot || !bot.candles || bot.candles.length === 0) return;
+      const rect = canvasEl.getBoundingClientRect();
+      const plotW = Math.max(1, rect.width - 84);
+      const win = getChartWindow(bot.candles.length);
+
+      if (isDraggingChart) {
+        const dx = e.clientX - dragStartX;
+        const candlesPerPx = win.viewCount / plotW;
+        const deltaCandles = Math.round(dx * candlesPerPx);
+        chartViewOffset = Math.max(0, Math.min(win.maxOffset, dragStartOffset + deltaCandles));
+        drawCandleChart(latestState);
+        return;
+      }
+
       const x = e.clientX - rect.left - 10;
-      const plotW = rect.width - 84;
-      const idx = Math.floor((x / plotW) * latestState.candles.length);
-      hoverIndex = Math.max(0, Math.min(latestState.candles.length - 1, idx));
+      hoverY = e.clientY - rect.top;
+      const idx = Math.floor((x / plotW) * win.viewCount);
+      hoverIndex = Math.max(0, Math.min(win.viewCount - 1, idx));
       drawCandleChart(latestState);
     });
+
     canvasEl.addEventListener("mouseleave", () => {
       hoverIndex = -1;
+      hoverY = -1;
       if (latestState) drawCandleChart(latestState);
     });
+
+    const resetZoomAction = () => {
+      chartViewCount = 60;
+      chartViewOffset = 0;
+      if (latestState) drawCandleChart(latestState);
+    };
+    canvasEl.addEventListener("dblclick", resetZoomAction);
+    document.getElementById("chart-reset-zoom").addEventListener("click", resetZoomAction);
+
     window.addEventListener("resize", () => {
       if (latestState) drawCandleChart(latestState);
     });
 
-    document.querySelectorAll(".tab").forEach((btn) => {
+    document.querySelectorAll("#main-tabs .tab").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll("#main-tabs .tab").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         const target = btn.dataset.tab;
-        ["dash", "history", "settings"].forEach((t) => {
+        ["dash", "history", "daily", "settings"].forEach((t) => {
           document.getElementById("tab-" + t).classList.toggle("hidden", t !== target);
         });
+        if (target === "dash" && btn.dataset.pair) {
+          activePair = btn.dataset.pair;
+          hoverIndex = -1;
+          chartViewOffset = 0;
+          if (latestState) renderActivePairView(latestState);
+        }
       });
     });
 
@@ -976,24 +1225,31 @@
     document.getElementById("scan-btn").addEventListener("click", async () => {
       const btn = document.getElementById("scan-btn");
       btn.disabled = true;
-      btn.textContent = "⏳ Scanning...";
-      await post("/api/scan");
-      btn.disabled = false;
-      btn.textContent = "🔍 Scan Sekarang";
-      refresh();
+      btn.textContent = "⏳ Scanning 3 Pair...";
+      try {
+        const res = await post("/api/scan");
+        if (res && res.message) {
+          const sumEl = document.getElementById("parallel-summary");
+          if (sumEl) sumEl.title = `Hasil scan terakhir: ${res.message}`;
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "🔍 Scan Sekarang";
+        refresh();
+      }
     });
 
     document.getElementById("manual-buy-btn").addEventListener("click", async () => {
       const modeText = latestState && latestState.config.mode === "live" ? "LIVE (UANG REAL)" : "PAPER TRADING";
-      if (!confirm(`Buka posisi BUY manual sekarang dalam mode ${modeText}?`)) return;
-      const res = await post("/api/manual-buy");
+      if (!confirm(`Buka posisi BUY manual untuk ${activePair} sekarang dalam mode ${modeText}?`)) return;
+      const res = await post("/api/manual-buy", { symbol: activePair });
       if (!res.ok) alert(res.message || "Gagal BUY manual.");
       refresh();
     });
 
     document.getElementById("close-pos-btn").addEventListener("click", async () => {
-      if (!confirm("Jual posisi spot yang sedang aktif sekarang?")) return;
-      await post("/api/close-position");
+      if (!confirm(`Jual posisi spot ${activePair} yang sedang aktif sekarang?`)) return;
+      await post("/api/close-position", { symbol: activePair });
       refresh();
     });
 
@@ -1001,6 +1257,25 @@
       if (!confirm("Reset saldo & riwayat Paper Trading?")) return;
       await post("/api/reset-paper");
       refresh();
+    });
+
+    document.getElementById("best-preset-btn").addEventListener("click", () => {
+      document.getElementById("cfg-interval").value = "15m";
+      document.getElementById("cfg-tp").value = 3.0;
+      document.getElementById("cfg-sl").value = 1.5;
+      document.getElementById("cfg-trail-act").value = 1.5;
+      document.getElementById("cfg-trail-pct").value = 0.8;
+      document.getElementById("cfg-min-conf").value = 70;
+      document.getElementById("cfg-max-daily").value = 5.0;
+      document.getElementById("cfg-daily-target").value = 500000;
+      document.getElementById("cfg-order-size").value = 390;
+      syncSimulatorFromSettings({
+        dailyTargetIdr: 500000,
+        takeProfitPct: 3.0,
+        stopLossPct: 1.5,
+        maxDailyLossPct: 5.0
+      });
+      setToast("⭐ Settingan terbaik 3-pair paralel (15m • TP 3% • SL 1.5% • Trailing 1.5%/0.8% • Target Rp 500rb • Order 390 USDT) diterapkan. Klik 'Simpan Pengaturan' untuk mengaktifkan.");
     });
 
     document.getElementById("test-ai-btn").addEventListener("click", async () => {
@@ -1051,6 +1326,7 @@
         trailingStopPct: Number(document.getElementById("cfg-trail-pct").value) || 0.8,
         minConfidence: Number(document.getElementById("cfg-min-conf").value) || 70,
         maxDailyLossPct: Number(document.getElementById("cfg-max-daily").value) || 5.0,
+        dailyTargetIdr: Math.max(0, Number(document.getElementById("cfg-daily-target").value) || 0),
         aiProvider: document.getElementById("cfg-ai-provider").value,
         aiModel: document.getElementById("cfg-ai-model").value.trim(),
         aiApiKey: document.getElementById("cfg-ai-key").value.trim(),
@@ -1107,6 +1383,7 @@
       document.getElementById("cfg-trail-pct").value = cfg.trailingStopPct;
       document.getElementById("cfg-min-conf").value = cfg.minConfidence;
       document.getElementById("cfg-max-daily").value = cfg.maxDailyLossPct;
+      document.getElementById("cfg-daily-target").value = cfg.dailyTargetIdr !== undefined ? cfg.dailyTargetIdr : 300000;
       document.getElementById("cfg-ai-provider").value = cfg.aiProvider;
       document.getElementById("cfg-ai-model").value = cfg.aiModel;
       document.getElementById("cfg-ai-key").value = cfg.aiApiKey || "";
@@ -1119,7 +1396,92 @@
       document.getElementById("cfg-smtp-user").value = cfg.smtpUser || "";
       document.getElementById("cfg-smtp-pass").value = cfg.smtpPass || "";
       document.getElementById("cfg-smtp-to").value = cfg.smtpTo || "";
+      syncSimulatorFromSettings(cfg);
     }
+
+    let lastSimResult = null;
+    const fmt = (n, d = 2) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtRp = (n) => "Rp " + Math.round(Number(n || 0)).toLocaleString("id-ID");
+
+    function syncSimulatorFromSettings(cfg) {
+      document.getElementById("sim-target-idr").value = cfg.dailyTargetIdr !== undefined ? cfg.dailyTargetIdr : 300000;
+      document.getElementById("sim-tp").value = cfg.takeProfitPct !== undefined ? cfg.takeProfitPct : 3.0;
+      document.getElementById("sim-sl").value = cfg.stopLossPct !== undefined ? cfg.stopLossPct : 1.5;
+      document.getElementById("sim-max-daily").value = cfg.maxDailyLossPct !== undefined ? cfg.maxDailyLossPct : 5.0;
+      runCapitalSimulation();
+    }
+
+    function runCapitalSimulation() {
+      const targetIdr = Math.max(0, Number(document.getElementById("sim-target-idr").value) || 0);
+      const pairCount = Math.max(1, Number(document.getElementById("sim-pair-count").value) || 3);
+      const tpPct = Math.max(0.1, Number(document.getElementById("sim-tp").value) || 3.0);
+      const slPct = Math.max(0.1, Number(document.getElementById("sim-sl").value) || 1.5);
+      const maxDailyPct = Math.max(0.5, Number(document.getElementById("sim-max-daily").value) || 5.0);
+      const feePct = Number(latestState?.config?.feePct) || 0.15;
+      const feeRate = feePct / 100;
+      const idrRate = Number(latestState?.idrRate) || 16250;
+      const sym = (document.getElementById("cfg-symbol").value || "BTCUSDT").trim().toUpperCase();
+      const isIdrPair = sym.endsWith("IDR") || sym.endsWith("BIDR");
+      const qUnit = isIdrPair ? "IDR" : "USDT";
+
+      // Profit & Loss bersih setelah fee beli + fee jual
+      let netTpRatio = (1 - feeRate) * (1 + tpPct / 100) * (1 - feeRate) - 1;
+      if (netTpRatio <= 0) netTpRatio = Math.max(0.001, tpPct / 100);
+      const netSlRatio = 1 - (1 - feeRate) * (1 - slPct / 100) * (1 - feeRate);
+
+      const neededOrderIdrSingle = targetIdr > 0 ? targetIdr / netTpRatio : 0;
+      const roundOrder = (idrVal) => {
+        if (idrVal <= 0) return 0;
+        return isIdrPair
+          ? Math.max(10000, Math.round(idrVal / 1000) * 1000)
+          : Math.max(10, Math.round(idrVal / idrRate / 10) * 10);
+      };
+
+      const orderSingle = roundOrder(neededOrderIdrSingle);
+      const orderSplit = roundOrder(neededOrderIdrSingle / pairCount);
+      // Untuk N pair paralel: butuh N slot aktif + minimal 1-2x cadangan drawdown
+      const recommendedOrder = pairCount > 1 ? orderSplit : orderSingle;
+      const safeTotalMin = recommendedOrder * (pairCount + 1);
+      const safeTotalCons = recommendedOrder * (pairCount + 2);
+
+      const tpGainQuote = recommendedOrder * netTpRatio;
+      const slLossQuote = recommendedOrder * netSlRatio;
+      const tpGainIdr = isIdrPair ? tpGainQuote : tpGainQuote * idrRate;
+      const slLossIdr = isIdrPair ? slLossQuote : slLossQuote * idrRate;
+      const maxDailyLossQuote = safeTotalMin * (maxDailyPct / 100);
+      const maxDailyLossIdr = isIdrPair ? maxDailyLossQuote : maxDailyLossQuote * idrRate;
+      const slStreak = slLossQuote > 0 ? Math.floor(maxDailyLossQuote / slLossQuote) : 0;
+      const rr = netSlRatio > 0 ? (netTpRatio / netSlRatio).toFixed(2) : "-";
+
+      const fmtVal = (q) => isIdrPair ? fmtRp(q) : `${fmt(q)} ${qUnit} (${fmtRp(q * idrRate)})`;
+
+      document.getElementById("sim-out-order-split").textContent = orderSplit > 0 ? `${fmtVal(orderSplit)} (${pairCount}x TP = target)` : "--";
+      document.getElementById("sim-out-order").textContent = orderSingle > 0 ? fmtVal(orderSingle) : "--";
+      document.getElementById("sim-out-cons").textContent = safeTotalMin > 0 ? `${fmt(safeTotalMin)}–${fmt(safeTotalCons)} ${qUnit} (${fmtRp(safeTotalMin * (isIdrPair ? 1 : idrRate))}–${fmtRp(safeTotalCons * (isIdrPair ? 1 : idrRate))})` : "--";
+      document.getElementById("sim-out-tp").textContent = recommendedOrder > 0 ? `+${(netTpRatio * 100).toFixed(2)}% (+${fmt(tpGainQuote)} ${qUnit} / +${fmtRp(tpGainIdr)})` : "--";
+      document.getElementById("sim-out-sl").textContent = recommendedOrder > 0 ? `-${(netSlRatio * 100).toFixed(2)}% (-${fmt(slLossQuote)} ${qUnit} / -${fmtRp(slLossIdr)})` : "--";
+      document.getElementById("sim-out-rr").textContent = `1 : ${rr}`;
+      document.getElementById("sim-out-maxloss").textContent = safeTotalMin > 0 ? `${maxDailyPct}% (-${fmt(maxDailyLossQuote)} ${qUnit} / -${fmtRp(maxDailyLossIdr)})` : "--";
+      document.getElementById("sim-out-streak").textContent = slStreak > 0 ? `~${slStreak}x SL (${pairCount} pair)` : "--";
+      document.getElementById("sim-out-rate").textContent = isIdrPair ? "Pair IDR (1:1)" : `1 USD ≈ ${fmtRp(idrRate)}`;
+
+      lastSimResult = { targetIdr, tpPct, slPct, maxDailyPct, suggestedOrder: recommendedOrder };
+    }
+
+    ["sim-target-idr", "sim-pair-count", "sim-tp", "sim-sl", "sim-max-daily"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", runCapitalSimulation);
+    });
+
+    document.getElementById("sim-apply-btn").addEventListener("click", () => {
+      runCapitalSimulation();
+      if (!lastSimResult || lastSimResult.suggestedOrder <= 0) return;
+      document.getElementById("cfg-daily-target").value = lastSimResult.targetIdr;
+      document.getElementById("cfg-tp").value = lastSimResult.tpPct;
+      document.getElementById("cfg-sl").value = lastSimResult.slPct;
+      document.getElementById("cfg-max-daily").value = lastSimResult.maxDailyPct;
+      document.getElementById("cfg-order-size").value = lastSimResult.suggestedOrder;
+      setToast("✅ Saran simulasi diterapkan ke form Pengaturan. Klik 'Simpan Pengaturan' untuk mengaktifkan.");
+    });
 
     async function refresh() {
       const modal = document.getElementById("pin-modal");
@@ -1153,11 +1515,32 @@
           }
         }
         const cfg = s.config;
-        document.getElementById("chart-title").textContent = `Grafik Candlestick Live — ${cfg.symbol} (${cfg.interval})`;
-        drawCandleChart(s);
         if (!settingsLoaded) {
           fillSettings(cfg);
           settingsLoaded = true;
+        }
+
+        // Update badge status 3 tab pair paralel
+        const botsMap = s.bots || {};
+        ["BTCUSDT", "ETHUSDT", "SOLUSDT"].forEach((sym) => {
+          const el = document.getElementById(`ptab-${sym}`);
+          const b = botsMap[sym];
+          if (!el) return;
+          if (b && b.position) {
+            const pct = Number(b.position.unrealizedPct || 0);
+            el.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+            el.style.color = pct >= 0 ? "#34d399" : "#fb7185";
+          } else if (b && b.lastPrice) {
+            el.textContent = Number(b.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 2 });
+            el.style.color = "#94a3b8";
+          } else {
+            el.textContent = "--";
+            el.style.color = "#94a3b8";
+          }
+        });
+        const pSum = document.getElementById("parallel-summary");
+        if (pSum) {
+          pSum.textContent = `Bot Paralel: 3 Pair (BTC • ETH • SOL) • ${s.activePositionsCount || 0}/3 Posisi Aktif`;
         }
 
         const pill = document.getElementById("mode-pill");
@@ -1177,13 +1560,8 @@
           alertEl.classList.add("hidden");
         }
 
-        const fmt = (n, d = 2) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-        const fmtRp = (n) => "Rp " + Math.round(Number(n || 0)).toLocaleString("id-ID");
         const qCur = s.quoteCurrency || "USDT";
-
-        document.getElementById("sym-label").textContent = `Harga Live (${cfg.symbol} • ${cfg.interval})`;
-        document.getElementById("live-price").textContent = s.lastPrice ? Number(s.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 4 }) : "--";
-        document.getElementById("price-meta").textContent = `Sumber: ${s.priceSource} • Update: ${s.lastUpdatedAt ? new Date(s.lastUpdatedAt).toLocaleTimeString() : "-"}`;
+        renderActivePairView(s);
 
         const activeBal = s.activeCashQuote !== undefined ? s.activeCashQuote : s.paperBalance;
         document.getElementById("balance-val").textContent = `${fmt(activeBal)} ${qCur}`;
@@ -1192,86 +1570,44 @@
         dp.textContent = `PnL Harian: ${s.dailyPnlQuote >= 0 ? "+" : ""}${fmt(s.dailyPnlQuote)} ${qCur} (${s.dailyPnlIdr >= 0 ? "+" : ""}${fmtRp(s.dailyPnlIdr)})`;
         dp.className = "sub " + (s.dailyPnlQuote >= 0 ? "up" : "down");
 
-        // Kotak lama Posisi Spot Aktif tetap bersih seperti semula
-        const posEl = document.getElementById("pos-status");
-        const posDet = document.getElementById("pos-detail");
-        const buyBtn = document.getElementById("manual-buy-btn");
-        const closeBtn = document.getElementById("close-pos-btn");
-        if (s.position) {
-          const p = s.position;
-          posEl.textContent = `${p.unrealizedPct >= 0 ? "+" : ""}${p.unrealizedPct.toFixed(2)}%`;
-          posEl.className = "big " + (p.unrealizedPct >= 0 ? "up" : "down");
-          posDet.textContent = `Entry ${p.entryPrice} | SL ${p.stopLossPrice.toFixed(2)}${p.trailingActive ? " (Trail)" : ""} | TP ${p.takeProfitPrice.toFixed(2)}`;
-          buyBtn.classList.add("hidden");
-          closeBtn.classList.remove("hidden");
+        const dTarget = Number(s.dailyTargetIdr) || 0;
+        const dPct = Number(s.dailyTargetProgressPct) || 0;
+        const dtStatus = document.getElementById("daily-target-status");
+        const dtBar = document.getElementById("daily-target-bar");
+        if (dTarget > 0) {
+          if (s.dailyTargetAchieved) {
+            dtStatus.innerHTML = `<span class="tag WIN">TERCAPAI</span> Target ${fmtRp(dTarget)} (${dPct.toFixed(1)}%)`;
+            dtBar.style.background = "#10b981";
+          } else {
+            dtStatus.innerHTML = `<span class="tag" style="background:rgba(245,158,11,0.18);color:#fbbf24;">BELUM TERCAPAI</span> Target ${fmtRp(dTarget)} (${dPct.toFixed(1)}%)`;
+            dtBar.style.background = s.dailyPnlIdr >= 0 ? "#38bdf8" : "#f43f5e";
+          }
+          dtBar.style.width = `${Math.max(0, Math.min(100, dPct))}%`;
         } else {
-          posEl.textContent = "KOSONG";
-          posEl.className = "big";
-          posDet.textContent = "Menunggu sinyal BUY valid";
-          buyBtn.classList.remove("hidden");
-          closeBtn.classList.add("hidden");
+          dtStatus.textContent = "Target harian belum diatur (0)";
+          dtBar.style.width = "0%";
+        }
+
+        // Kotak lama Posisi Spot Aktif & detail pair aktif ditangani oleh renderActivePairView(s)
+        const kursRate = s.usdtIdrRate || s.idrRate || 0;
+        const kursSrc = s.usdtIdrSource && s.usdtIdrSource !== "-" ? s.usdtIdrSource : "fallback";
+        const kursTime = s.usdtIdrUpdatedAt
+          ? new Date(s.usdtIdrUpdatedAt).toLocaleTimeString("id-ID", { hour12: false })
+          : "-";
+        const kursPill = document.getElementById("kurs-pill");
+        if (kursPill) {
+          kursPill.textContent = kursRate ? `💵 1 USD ≈ ${fmtRp(kursRate)}` : "💵 USD/IDR: --";
+          kursPill.title = `Sumber: ${kursSrc} | Update terakhir: ${kursTime} (tiap 5 menit)`;
         }
 
         // Kotak Baru: Perbandingan Entry vs Sekarang & Rupiah
         document.getElementById("cmp-rate-info").textContent =
           qCur === "IDR" || qCur === "BIDR"
             ? "Mata uang pasangan: IDR"
-            : `Kurs konversi live: 1 ${qCur} ≈ ${fmtRp(s.idrRate)}`;
+            : `Kurs konversi (5m): 1 ${qCur} ≈ ${fmtRp(s.idrRate)} (sumber: ${kursSrc} • update: ${kursTime})`;
         document.getElementById("cmp-cash").textContent = `${fmt(activeBal)} ${qCur} (${fmtRp(s.cashIdr)})`;
         document.getElementById("cmp-equity").textContent = `${fmt(s.totalEquityQuote)} ${qCur}`;
         document.getElementById("cmp-equity-idr").textContent = fmtRp(s.totalEquityIdr);
-
-        const badgeBox = document.getElementById("cmp-state-badge");
-        if (s.position) {
-          const p = s.position;
-          const isUp = p.unrealizedQuote >= 0;
-          const sign = isUp ? "+" : "";
-          const pSign = p.priceDiff >= 0 ? "+" : "";
-          const stateLabel = p.pnlState || (isUp ? "UNTUNG" : "RUGI");
-
-          badgeBox.innerHTML = `<span class="pos-badge ${isUp ? "up" : "down"}">${stateLabel} ${sign}${p.unrealizedPct.toFixed(2)}% (${sign}${fmtRp(p.unrealizedIdr)})</span>`;
-          document.getElementById("cmp-entry-price").textContent = `${fmt(p.entryPrice)} ${qCur}`;
-          document.getElementById("cmp-cur-price").textContent = `${fmt(p.currentPrice)} ${qCur}`;
-          const diffEl = document.getElementById("cmp-price-diff");
-          diffEl.textContent = `${pSign}${fmt(p.priceDiff)} ${qCur} (${pSign}${p.priceDiffPct.toFixed(2)}%)`;
-          diffEl.className = p.priceDiff >= 0 ? "up" : "down";
-
-          document.getElementById("cmp-cost").textContent = `${fmt(p.costQuote)} ${qCur} (${fmtRp(p.costIdr)})`;
-          document.getElementById("cmp-cur-val").textContent = `${fmt(p.currentValueQuote)} ${qCur} (${fmtRp(p.currentValueIdr)})`;
-          const netEl = document.getElementById("cmp-net-pnl");
-          netEl.textContent = `${stateLabel} ${sign}${fmt(p.unrealizedQuote)} ${qCur} (${sign}${p.unrealizedPct.toFixed(2)}% / ${sign}${fmtRp(p.unrealizedIdr)})`;
-          netEl.className = isUp ? "up" : "down";
-        } else {
-          badgeBox.innerHTML = `<span class="tag" style="background:rgba(148,163,184,0.18);color:#cbd5e1;">BELUM ADA POSISI AKTIF</span>`;
-          document.getElementById("cmp-entry-price").textContent = "--";
-          document.getElementById("cmp-cur-price").textContent = s.lastPrice ? `${fmt(s.lastPrice)} ${qCur}` : "--";
-          const diffEl = document.getElementById("cmp-price-diff");
-          diffEl.textContent = "--";
-          diffEl.className = "";
-          document.getElementById("cmp-cost").textContent = "--";
-          document.getElementById("cmp-cur-val").textContent = "--";
-          const netEl = document.getElementById("cmp-net-pnl");
-          netEl.textContent = "Menunggu posisi BUY";
-          netEl.className = "";
-        }
-
-        const ai = s.lastAiDecision;
-        if (ai) {
-          document.getElementById("ai-decision").textContent = `${ai.decision} (${ai.combinedScore || ai.confidence || 0}%)`;
-          document.getElementById("ai-reason").textContent = ai.reason || "-";
-        }
-
-        const an = s.lastAnalysis;
-        if (an && an.ready) {
-          document.getElementById("ind-trend").textContent = an.trend.replace(/_/g, " ");
-          document.getElementById("ind-setup").textContent = `Setup: ${an.proposal} ${an.setupType} (${an.score})`;
-          document.getElementById("ind-rsi").textContent = an.rsi.toFixed(1);
-          document.getElementById("ind-candle").textContent = `Candle: ${an.candleColor} (${an.rejection})`;
-          document.getElementById("ind-bb").textContent = an.bollinger ? `%B ${(an.bollinger.percentB * 100).toFixed(0)}%` : "-";
-          document.getElementById("ind-er").textContent = `Efficiency Ratio: ${an.er.toFixed(2)}`;
-          document.getElementById("ind-vol").textContent = `${an.volRatio.toFixed(2)}x avg`;
-          document.getElementById("ind-atr").textContent = `ATR: ${an.atrPct.toFixed(2)}%`;
-        }
 
         const logsBox = document.getElementById("logs-box");
         logsBox.innerHTML = "";
@@ -1303,7 +1639,152 @@
           `;
           tbody.appendChild(tr);
         }
-      } catch (_) {}
+
+        // Rekap Harian
+        const dailyRows = s.dailyHistory || [];
+        let sumTargetIdr = 0, sumPnlIdr = 0, sumPnlQuote = 0, sumTrades = 0, sumWins = 0, sumLosses = 0, achievedDays = 0;
+        const dBody = document.getElementById("daily-body");
+        dBody.innerHTML = "";
+        for (const d of dailyRows) {
+          const tIdr = Number(d.targetIdr) || 0;
+          const pIdr = Number(d.pnlIdr) || 0;
+          const pQuote = Number(d.pnlQuote) || 0;
+          const pct = tIdr > 0 ? (pIdr / tIdr) * 100 : 0;
+          const isAch = Boolean(d.achieved);
+          sumTargetIdr += tIdr;
+          sumPnlIdr += pIdr;
+          sumPnlQuote += pQuote;
+          sumTrades += Number(d.trades) || 0;
+          sumWins += Number(d.wins) || 0;
+          sumLosses += Number(d.losses) || 0;
+          if (isAch) achievedDays += 1;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${d.date}</td>
+            <td>${fmtRp(tIdr)}</td>
+            <td class="${pIdr >= 0 ? "up" : "down"}">${pIdr >= 0 ? "+" : ""}${fmtRp(pIdr)} <span style="color:var(--muted);font-size:11px;">(${pQuote >= 0 ? "+" : ""}${fmt(pQuote)} ${qCur})</span></td>
+            <td>${d.trades || 0} (${d.wins || 0}W / ${d.losses || 0}L)</td>
+            <td class="${pct >= 100 ? "up" : pct < 0 ? "down" : ""}">${tIdr > 0 ? pct.toFixed(1) + "%" : "-"}</td>
+            <td>${tIdr > 0 ? (isAch ? '<span class="tag WIN">TERCAPAI</span>' : '<span class="tag" style="background:rgba(245,158,11,0.18);color:#fbbf24;">BELUM</span>') : '<span class="tag">-</span>'}</td>
+          `;
+          dBody.appendChild(tr);
+        }
+
+        const totalPct = sumTargetIdr > 0 ? (sumPnlIdr / sumTargetIdr) * 100 : 0;
+        document.getElementById("daily-stats").textContent =
+          `Total ${dailyRows.length} hari (${achievedDays} hari tercapai) • Total Pendapatan: ${sumPnlIdr >= 0 ? "+" : ""}${fmtRp(sumPnlIdr)}`;
+        document.getElementById("daily-foot").innerHTML = dailyRows.length
+          ? `<tr style="font-weight:800;background:rgba(30,41,59,0.55);">
+              <td>JUMLAH (${dailyRows.length} Hari)</td>
+              <td>${fmtRp(sumTargetIdr)}</td>
+              <td class="${sumPnlIdr >= 0 ? "up" : "down"}">${sumPnlIdr >= 0 ? "+" : ""}${fmtRp(sumPnlIdr)} <span style="color:var(--muted);font-size:11px;font-weight:600;">(${sumPnlQuote >= 0 ? "+" : ""}${fmt(sumPnlQuote)} ${qCur})</span></td>
+              <td>${sumTrades} (${sumWins}W / ${sumLosses}L)</td>
+              <td class="${totalPct >= 100 ? "up" : totalPct < 0 ? "down" : ""}">${sumTargetIdr > 0 ? totalPct.toFixed(1) + "%" : "-"}</td>
+              <td>${achievedDays}/${dailyRows.length} Tercapai</td>
+            </tr>`
+          : "";
+      } catch (err) {
+        console.error("refresh error:", err);
+      }
+    }
+
+    function renderActivePairView(s) {
+      const bot = getActiveBot(s);
+      if (!bot) return;
+      const cfg = s.config || {};
+      const qCur = s.quoteCurrency || "USDT";
+
+      document.getElementById("chart-title").textContent = `Grafik Candlestick Live — ${activePair} (${cfg.interval || "15m"})`;
+      drawCandleChart(s);
+
+      document.getElementById("sym-label").textContent = `Harga Live (${activePair} • ${cfg.interval || "15m"})`;
+      document.getElementById("live-price").textContent = bot.lastPrice ? Number(bot.lastPrice).toLocaleString("en-US", { maximumFractionDigits: 4 }) : "--";
+      document.getElementById("price-meta").textContent = `Sumber: ${bot.priceSource || "-"} • Update: ${bot.lastUpdatedAt ? new Date(bot.lastUpdatedAt).toLocaleTimeString() : "-"}`;
+
+      const posEl = document.getElementById("pos-status");
+      const posDet = document.getElementById("pos-detail");
+      const buyBtn = document.getElementById("manual-buy-btn");
+      const closeBtn = document.getElementById("close-pos-btn");
+      if (bot.position) {
+        const p = bot.position;
+        posEl.textContent = `${p.unrealizedPct >= 0 ? "+" : ""}${p.unrealizedPct.toFixed(2)}%`;
+        posEl.className = "big " + (p.unrealizedPct >= 0 ? "up" : "down");
+        posDet.textContent = `Entry ${p.entryPrice} | SL ${p.stopLossPrice.toFixed(2)}${p.trailingActive ? " (Trail)" : ""} | TP ${p.takeProfitPrice.toFixed(2)}`;
+        buyBtn.classList.add("hidden");
+        closeBtn.classList.remove("hidden");
+      } else {
+        posEl.textContent = "KOSONG";
+        posEl.className = "big";
+        posDet.textContent = `Menunggu sinyal BUY valid (${activePair})`;
+        buyBtn.classList.remove("hidden");
+        closeBtn.classList.add("hidden");
+      }
+
+      const badgeBox = document.getElementById("cmp-state-badge");
+      if (bot.position) {
+        const p = bot.position;
+        const isUp = p.unrealizedQuote >= 0;
+        const sign = isUp ? "+" : "";
+        const pSign = p.priceDiff >= 0 ? "+" : "";
+        const stateLabel = p.pnlState || (isUp ? "UNTUNG" : "RUGI");
+
+        badgeBox.innerHTML = `<span class="pos-badge ${isUp ? "up" : "down"}">${activePair} ${stateLabel} ${sign}${p.unrealizedPct.toFixed(2)}% (${sign}${fmtRp(p.unrealizedIdr)})</span>`;
+        document.getElementById("cmp-entry-price").textContent = `${fmt(p.entryPrice)} ${qCur}`;
+        document.getElementById("cmp-cur-price").textContent = `${fmt(p.currentPrice)} ${qCur}`;
+        const diffEl = document.getElementById("cmp-price-diff");
+        diffEl.textContent = `${pSign}${fmt(p.priceDiff)} ${qCur} (${pSign}${p.priceDiffPct.toFixed(2)}%)`;
+        diffEl.className = p.priceDiff >= 0 ? "up" : "down";
+
+        document.getElementById("cmp-cost").textContent = `${fmt(p.costQuote)} ${qCur} (${fmtRp(p.costIdr)})`;
+        document.getElementById("cmp-cur-val").textContent = `${fmt(p.currentValueQuote)} ${qCur} (${fmtRp(p.currentValueIdr)})`;
+        const netEl = document.getElementById("cmp-net-pnl");
+        netEl.textContent = `${stateLabel} ${sign}${fmt(p.unrealizedQuote)} ${qCur} (${sign}${p.unrealizedPct.toFixed(2)}% / ${sign}${fmtRp(p.unrealizedIdr)})`;
+        netEl.className = isUp ? "up" : "down";
+      } else {
+        badgeBox.innerHTML = `<span class="tag" style="background:rgba(148,163,184,0.18);color:#cbd5e1;">BELUM ADA POSISI AKTIF (${activePair})</span>`;
+        document.getElementById("cmp-entry-price").textContent = "--";
+        document.getElementById("cmp-cur-price").textContent = bot.lastPrice ? `${fmt(bot.lastPrice)} ${qCur}` : "--";
+        const diffEl = document.getElementById("cmp-price-diff");
+        diffEl.textContent = "--";
+        diffEl.className = "";
+        document.getElementById("cmp-cost").textContent = "--";
+        document.getElementById("cmp-cur-val").textContent = "--";
+        const netEl = document.getElementById("cmp-net-pnl");
+        netEl.textContent = `Menunggu posisi BUY (${activePair})`;
+        netEl.className = "";
+      }
+
+      const ai = bot.lastAiDecision;
+      if (ai) {
+        const shownScore = ai.combinedScore !== undefined ? ai.combinedScore : (ai.confidence || 0);
+        document.getElementById("ai-decision").textContent = `${ai.decision} (${shownScore}%)`;
+        document.getElementById("ai-reason").textContent = ai.reason || "-";
+      } else {
+        document.getElementById("ai-decision").textContent = "WAIT";
+        document.getElementById("ai-reason").textContent = `Belum ada analisa AI untuk ${activePair}.`;
+      }
+
+      const an = bot.lastAnalysis;
+      if (an && an.ready) {
+        document.getElementById("ind-trend").textContent = an.trend.replace(/_/g, " ");
+        document.getElementById("ind-setup").textContent = `Setup: ${an.proposal} ${an.setupType} (${an.score})`;
+        document.getElementById("ind-rsi").textContent = an.rsi.toFixed(1);
+        document.getElementById("ind-candle").textContent = `Candle: ${an.candleColor} (${an.rejection})`;
+        document.getElementById("ind-bb").textContent = an.bollinger ? `%B ${(an.bollinger.percentB * 100).toFixed(0)}%` : "-";
+        document.getElementById("ind-er").textContent = `Efficiency Ratio: ${an.er.toFixed(2)}`;
+        document.getElementById("ind-vol").textContent = `${an.volRatio.toFixed(2)}x avg`;
+        document.getElementById("ind-atr").textContent = `ATR: ${an.atrPct.toFixed(2)}%`;
+      } else {
+        document.getElementById("ind-trend").textContent = "--";
+        document.getElementById("ind-setup").textContent = `Setup: Menunggu scan ${activePair}`;
+        document.getElementById("ind-rsi").textContent = "--";
+        document.getElementById("ind-candle").textContent = "Candle: --";
+        document.getElementById("ind-bb").textContent = "--";
+        document.getElementById("ind-er").textContent = "Efficiency Ratio: --";
+        document.getElementById("ind-vol").textContent = "--";
+        document.getElementById("ind-atr").textContent = "ATR: --";
+      }
     }
 
     if (!authToken) {

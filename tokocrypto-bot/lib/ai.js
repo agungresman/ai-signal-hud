@@ -40,25 +40,53 @@ async function listOllamaModels(chatEndpoint) {
   return models.map((m) => m.name || m.model).filter(Boolean);
 }
 
-function buildSpotPrompt(config, analysis, position) {
+function buildSpotPrompt(config, analysis, position, context = {}) {
   const posText = position
-    ? `HOLD ${position.qty.toFixed(6)} @ ${position.entryPrice} (PnL ${position.unrealizedPct.toFixed(2)}%)`
+    ? `HOLD ${position.qty.toFixed(6)} @ ${position.entryPrice} (PnL ${position.unrealizedPct.toFixed(2)}%, SL=${position.stopLossPrice?.toFixed?.(2) || "-"}, TP=${position.takeProfitPrice?.toFixed?.(2) || "-"})`
     : "KOSONG (belum pegang koin)";
 
-  return `Validator risiko Spot Trading Crypto (${config.symbol}, timeframe ${config.interval}).
+  const targetIdr = Number(context.dailyTargetIdr) || 0;
+  const pnlIdr = Number(context.dailyPnlIdr) || 0;
+  const remIdr = Math.max(0, targetIdr - pnlIdr);
+  const targetLine = targetIdr > 0
+    ? `Target Harian: Rp ${Math.round(targetIdr).toLocaleString("id-ID")} | PnL Hari Ini: Rp ${Math.round(pnlIdr).toLocaleString("id-ID")} (${context.dailyTargetAchieved ? "SUDAH TERCAPAI - jaga profit, hanya ambil setup A+" : "sisa Rp " + Math.round(remIdr).toLocaleString("id-ID")})`
+    : `PnL Hari Ini: Rp ${Math.round(pnlIdr).toLocaleString("id-ID")}`;
+
+  const histList = Array.isArray(context.recentHistory) ? context.recentHistory.slice(0, 4) : [];
+  const histLine = histList.length > 0
+    ? histList.map((h) => `${h.status}(${h.pnlPct >= 0 ? "+" : ""}${Number(h.pnlPct).toFixed(2)}% ${h.reason})`).join(", ")
+    : "belum ada";
+
+  const candlesList = Array.isArray(context.recentCandles) ? context.recentCandles.slice(-5) : [];
+  const candleSeq = candlesList.length > 0
+    ? candlesList.map((c) => `${c.close >= c.open ? "G" : "R"}(${c.close})`).join(" -> ")
+    : "-";
+
+  const resDist = analysis.distToResistancePct !== undefined ? `${analysis.distToResistancePct.toFixed(2)}%` : "-";
+  const supDist = analysis.distToSupportPct !== undefined ? `${analysis.distToSupportPct.toFixed(2)}%` : "-";
+
+  return `Analis & Validator Risiko Spot Trading Crypto (${config.symbol}, timeframe ${config.interval}).
+Parameter Risiko: TP=+${config.takeProfitPct}% | SL=-${config.stopLossPct}% | Trailing=+${config.trailingActivatePct}% (jarak ${config.trailingStopPct}%) | MinConfidence=${config.minConfidence}%
+${targetLine}
+Riwayat 4 Trade Terakhir: ${histLine}
 Posisi saat ini: ${posText}
-USULAN SISTEM: ${analysis.proposal} | Setup: ${analysis.setupType} | Skor: ${analysis.score}/95
+USULAN SISTEM: ${analysis.proposal} | Setup: ${analysis.setupType} | Skor Sistem: ${analysis.score}/95
 Indikator (candle tutup):
 - Tren: ${analysis.trend} (EMA9=${analysis.ema9.toFixed(2)}, EMA21=${analysis.ema21.toFixed(2)}, EMA50=${analysis.ema50.toFixed(2)})
-- RSI(14): ${analysis.rsi.toFixed(1)} (prev ${analysis.rsiPrev.toFixed(1)})
+- RSI(14): ${analysis.rsi.toFixed(1)} (prev ${analysis.rsiPrev.toFixed(1)}) | Efficiency Ratio: ${analysis.er.toFixed(2)}
 - Bollinger %B: ${analysis.bollinger ? Math.round(analysis.bollinger.percentB * 100) + "%" : "-"}
 - Volume: ${analysis.volRatio.toFixed(2)}x rata-rata | ATR: ${analysis.atrPct.toFixed(2)}% | Candle: ${analysis.candleColor} (${analysis.rejection})
+- Jarak Support/Resistance (20 candle): ke Support -${supDist} | ke Resistance +${resDist}
+- Urutan 5 Candle Terakhir: ${candleSeq}
 - Sinyal: ${analysis.signals.join("; ") || "-"}
 - Peringatan: ${analysis.warnings.join("; ") || "tidak ada"}
 
-Aturan: Jawab "${analysis.proposal}" jika setup layak & risiko wajar, atau "WAIT" jika berisiko. Dilarang membalik arah usulan.
+Aturan Keputusan:
+1. Jawab "${analysis.proposal}" jika probabilitas menang tinggi, ruang ke resistance cukup untuk TP/Trailing, dan risiko terkendali; atau jawab "WAIT" jika market choppy (ER rendah), dekat resistance, atau berisiko.
+2. Jika Target Harian SUDAH TERCAPAI, perketat standar: hanya setujui jika setup sangat kuat (volume >= 1.15x & tren jelas).
+3. Dilarang membalik arah usulan.
 Balas HANYA JSON valid:
-{"decision":"${analysis.proposal === "WAIT" ? "WAIT" : analysis.proposal + '"|"WAIT'}","confidence":0-100,"risk":"LOW|MEDIUM|HIGH","reason":"1-2 kalimat Bahasa Indonesia"}`;
+{"decision":"${analysis.proposal === "WAIT" ? "WAIT" : analysis.proposal + '"|"WAIT'}","confidence":0-100,"risk":"LOW|MEDIUM|HIGH","reason":"1-2 kalimat Bahasa Indonesia yang spesifik"}`;
 }
 
 function extractJson(text) {
@@ -101,7 +129,7 @@ async function callOllamaChat(endpoint, model, prompt, timeoutMs = 120000) {
         stream: false,
         format: "json",
         keep_alive: "24h", // Kunci model di RAM Railway agar tidak di-unload tiap 5 menit
-        options: { temperature: 0.1, num_predict: 120 },
+        options: { temperature: 0.1, num_predict: 200 },
         messages: [
           { role: "system", content: "Validator risiko spot crypto. Balas HANYA JSON valid." },
           { role: "user", content: prompt }
@@ -112,8 +140,8 @@ async function callOllamaChat(endpoint, model, prompt, timeoutMs = 120000) {
   );
 }
 
-async function validateWithAI(config, analysis, position) {
-  const prompt = buildSpotPrompt(config, analysis, position);
+async function validateWithAI(config, analysis, position, context = {}) {
+  const prompt = buildSpotPrompt(config, analysis, position, context);
   const provider = config.aiProvider || "ollama";
 
   if (provider === "ollama") {

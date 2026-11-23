@@ -124,6 +124,11 @@ function analyzeCandles(rawCandles, hasOpenPosition = false) {
 
   const percentB = bb && bb.upper > bb.lower ? (L.close - bb.lower) / (bb.upper - bb.lower) : 0.5;
   const atrPct = L.close > 0 ? (atr / L.close) * 100 : 0;
+  const recent20 = closed.slice(-20);
+  const support20 = Math.min(...recent20.map((c) => c.low));
+  const resistance20 = Math.max(...recent20.map((c) => c.high));
+  const distToResistancePct = L.close > 0 ? ((resistance20 - L.close) / L.close) * 100 : 0;
+  const distToSupportPct = L.close > 0 ? ((L.close - support20) / L.close) * 100 : 0;
 
   let trend = "SIDEWAYS";
   if (ema9 > ema21 && ema21 > ema50 && slope21 > 0) trend = "STRONG_UPTREND";
@@ -162,6 +167,13 @@ function analyzeCandles(rawCandles, hasOpenPosition = false) {
           signals.push("Lower-wick rejection (buyer kuat)");
         }
         if (er >= 0.35) score += 4;
+        if (distToResistancePct >= 1.5) {
+          score += 4;
+          signals.push(`Ruang naik ke resistance 20-candle masih ${distToResistancePct.toFixed(2)}%`);
+        } else if (distToResistancePct < 0.6) {
+          score -= 6;
+          warnings.push(`Dekat resistance 20-candle (${distToResistancePct.toFixed(2)}%), rawan tertolak`);
+        }
       } else {
         warnings.push(`Uptrend tapi RSI ${rsi.toFixed(0)} atau ada upper-wick rejection`);
       }
@@ -218,6 +230,10 @@ function analyzeCandles(rawCandles, hasOpenPosition = false) {
     atrPct,
     er,
     volRatio,
+    support20,
+    resistance20,
+    distToResistancePct,
+    distToSupportPct,
     candleColor: isGreen ? "GREEN" : isRed ? "RED" : "DOJI",
     rejection: lowerRejection ? "LOWER_WICK" : upperRejection ? "UPPER_WICK" : "NONE",
     proposal,

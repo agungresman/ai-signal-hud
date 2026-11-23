@@ -4,7 +4,7 @@
     "symbol": "BTCUSDT",
     "interval": "15m",
     "paperInitialBalance": 1000,
-    "orderSizeQuote": 100,
+    "orderSizeQuote": 340,
     "stopLossPct": 1.5,
     "takeProfitPct": 3,
     "trailingActivatePct": 1.5,
@@ -12,6 +12,7 @@
     "feePct": 0.15,
     "minConfidence": 70,
     "maxDailyLossPct": 5,
+    "dailyTargetIdr": 500000,
     "aiProvider": "ollama",
     "aiModel": "qwen2.5:3b",
     "aiApiKey": "",
@@ -29,75 +30,89 @@
     "smtpTo": ""
   },
   "running": true,
-  "paperBalance": 902.5222754261072,
+  "paperBalance": 1001.5326089817434,
   "liveQuoteBalance": 0.08288352,
   "liveBaseBalance": 0,
-  "dailyPnlQuote": 0.6580439224155015,
-  "dailyPnlDate": "2026-11-22",
-  "position": {
-    "symbol": "BTCUSDT",
-    "base": "BTC",
-    "quote": "USDT",
-    "mode": "paper",
-    "qty": 0.0016395620325051997,
-    "entryPrice": 60900.41,
-    "costQuote": 100,
-    "entryTime": 1795352448815,
-    "highestPrice": 60900.41,
-    "stopLossPrice": 59986.90385,
-    "takeProfitPrice": 62727.422300000006,
-    "trailingActive": false,
-    "setupType": "SPOT_UPTREND_PULLBACK"
-  },
-  "lastPrice": 60900.41,
-  "usdtIdrRate": 15980,
+  "dailyPnlQuote": -0.9896664443638485,
+  "dailyPnlDate": "2026-11-23",
+  "dailyHistory": [
+    {
+      "date": "2026-11-23",
+      "targetIdr": 500000,
+      "targetQuote": 27.29108673107363,
+      "pnlQuote": -0.9896664443638485,
+      "pnlIdr": -18131.67892719007,
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "achieved": false
+    },
+    {
+      "date": "2026-11-22",
+      "targetIdr": 400000,
+      "targetQuote": 21.823340062196518,
+      "pnlQuote": 0.6580439224155015,
+      "pnlIdr": 12061.287053953727,
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "achieved": false
+    }
+  ],
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "position": null,
+  "lastPrice": 61744.97,
+  "usdtIdrRate": 18317,
+  "usdtIdrSource": "indodax",
+  "usdtIdrUpdatedAt": 1795404284220,
   "priceSource": "binance_vision",
-  "lastUpdatedAt": 1795352439492,
-  "lastClosedCandleTime": 1795352399999,
+  "lastUpdatedAt": 1795404284450,
+  "lastClosedCandleTime": 1795401899999,
   "lastAnalysis": {
     "ready": true,
-    "closedCandleTime": 1795352399999,
-    "lastClose": 60852.29,
-    "trend": "STRONG_UPTREND",
-    "ema9": 60831.780701623495,
-    "ema21": 60523.26446394366,
-    "ema50": 60231.03977104702,
-    "rsi": 60.71042615706848,
-    "rsiPrev": 58.85663751046691,
+    "closedCandleTime": 1795401899999,
+    "lastClose": 60552.13,
+    "trend": "DOWNTREND",
+    "ema9": 60887.437518284976,
+    "ema21": 60957.7472092961,
+    "ema50": 60858.30976280144,
+    "rsi": 35.085604116869405,
+    "rsiPrev": 40.37154901012877,
     "bollinger": {
-      "upper": 61688.53471841966,
-      "middle": 60540.26349999999,
-      "lower": 59391.992281580315,
-      "stdDev": 574.1356092098362,
-      "percentB": 0.6358679443474367
+      "upper": 61428.93959409693,
+      "middle": 61022.67899999999,
+      "lower": 60616.418405903045,
+      "stdDev": 203.13029704847196,
+      "percentB": -0.07912212855144235
     },
-    "atr": 399.7914285714282,
-    "atrPct": 0.6569866615889528,
-    "er": 0.02700461671433303,
-    "volRatio": 0.38976277313898233,
-    "candleColor": "GREEN",
+    "atr": 270.369999999999,
+    "atrPct": 0.4465078272225915,
+    "er": 0.6454384565303097,
+    "volRatio": 2.2086430027554376,
+    "support20": 60386,
+    "resistance20": 61464.35,
+    "distToResistancePct": 1.5065035697340476,
+    "distToSupportPct": 0.27435863940706523,
+    "candleColor": "RED",
     "rejection": "NONE",
-    "proposal": "BUY",
-    "setupType": "SPOT_UPTREND_PULLBACK",
-    "score": 75,
-    "signals": [
-      "STRONG_UPTREND (EMA9>EMA21>EMA50)",
-      "Candle hijau di atas EMA9, RSI 60.7",
-      "Pullback sehat ke EMA9"
-    ],
-    "warnings": []
+    "proposal": "WAIT",
+    "setupType": "NO_SETUP",
+    "score": 0,
+    "signals": [],
+    "warnings": [
+      "Belum ada setup BUY (DOWNTREND, RSI 35, %B -8%)"
+    ]
   },
   "lastAiDecision": {
-    "decision": "BUY",
-    "confidence": 80,
+    "decision": "WAIT",
+    "confidence": 0,
     "risk": "LOW",
-    "reason": "Setup memiliki skor 75/95 dan semua indikator mendukung tren naik. Risiko rendah karena volume normal dan ATR kecil.",
-    "modelUsed": "qwen2.5:3b",
-    "endpointUsed": "https://bootoh-ai-developmet.up.railway.app/api/chat",
-    "combinedScore": 77,
-    "systemProposal": "BUY",
-    "systemScore": 75,
-    "at": 1795352448814
+    "reason": "Belum ada setup BUY (DOWNTREND, RSI 35, %B -8%)",
+    "at": 1795401902795
   },
   "aiGuard": {
     "locked": false,
@@ -106,6 +121,21 @@
     "failCount": 0
   },
   "history": [
+    {
+      "time": "22/11/2026 20:00:48",
+      "exitTime": "23/11/2026 09:44:19",
+      "entryTimestamp": 1795352448815,
+      "exitTimestamp": 1795401859713,
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 60900.41,
+      "exitPrice": 60479,
+      "qty": 0.0016395620325051997,
+      "pnlQuote": -0.9896664443638485,
+      "pnlPct": -0.9896664443638484,
+      "reason": "TREND_BREAK_EXIT",
+      "status": "LOSS"
+    },
     {
       "time": "4:01:13 PM",
       "exitTime": "5:01:55 PM",
@@ -174,204 +204,365 @@
   ],
   "logs": [
     {
-      "time": "8:00:48 PM",
+      "time": "10.24.43",
       "level": "info",
-      "msg": "BUY BTCUSDT (PAPER) @ 60900.41 | SL 59986.90 | TP 62727.42"
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     },
     {
-      "time": "7:49:50 PM",
+      "time": "10.11.53",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.52",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.51",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.50",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.49",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.48",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.46",
+      "level": "info",
+      "msg": "Scan Manual 3 Pair: BTCUSDT: DOWNTREND (WAIT) | ETHUSDT: DOWNTREND (WAIT) | SOLUSDT: DOWNTREND (WAIT)"
+    },
+    {
+      "time": "10.11.35",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.11.17",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.10.47",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.08.30",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.08.25",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.07.32",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.07.16",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "10.06.25",
+      "level": "info",
+      "msg": "[SOLUSDT] Scan: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
+    },
+    {
+      "time": "10.06.19",
+      "level": "info",
+      "msg": "[ETHUSDT] Scan: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
+    },
+    {
+      "time": "10.06.09",
+      "level": "info",
+      "msg": "[BTCUSDT] Scan: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
+    },
+    {
+      "time": "10.05.40",
       "level": "info",
       "msg": "Pengaturan diperbarui (PAPER • BTCUSDT 15m • AI ollama/qwen2.5:3b)."
     },
     {
-      "time": "7:49:18 PM",
+      "time": "10.04.03",
       "level": "info",
-      "msg": "Pengaturan diperbarui (LIVE • BTCUSDT 15m • AI ollama/qwen2.5:3b)."
+      "msg": "Pengaturan diperbarui (PAPER • BTCUSDT 15m • AI ollama/qwen2.5:3b)."
     },
     {
-      "time": "7:47:38 PM",
-      "level": "info",
-      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
-    },
-    {
-      "time": "6:24:33 PM",
-      "level": "info",
-      "msg": "Scan selesai: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
-    },
-    {
-      "time": "6:20:30 PM",
-      "level": "info",
-      "msg": "Scan selesai: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
-    },
-    {
-      "time": "6:16:02 PM",
+      "time": "10.03.41",
       "level": "info",
       "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     },
     {
-      "time": "5:16:37 PM",
-      "level": "info",
-      "msg": "AI pulih setelah recovery. Scheduler dilanjutkan."
-    },
-    {
-      "time": "5:14:20 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "5:11:35 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "5:08:50 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "5:01:55 PM",
-      "level": "info",
-      "msg": "SELL BTCUSDT (TRAILING_STOP) @ 60840.69 | WIN +1.39%"
-    },
-    {
-      "time": "4:55:05 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:52:23 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:51:04 PM",
+      "time": "10.02.19",
       "level": "info",
       "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     },
     {
-      "time": "4:42:24 PM",
-      "level": "info",
-      "msg": "AI pulih setelah recovery. Scheduler dilanjutkan."
-    },
-    {
-      "time": "4:40:14 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:37:29 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:34:52 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:33:39 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:32:34 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "4:01:13 PM",
-      "level": "info",
-      "msg": "BUY BTCUSDT (PAPER) @ 59826.21 | SL 58928.82 | TP 61621.00"
-    },
-    {
-      "time": "2:31:07 PM",
-      "level": "info",
-      "msg": "Scan selesai: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
-    },
-    {
-      "time": "2:30:29 PM",
-      "level": "info",
-      "msg": "AI pulih setelah recovery. Scheduler dilanjutkan."
-    },
-    {
-      "time": "2:27:58 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "2:25:21 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "2:24:08 PM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "2:22:43 PM",
+      "time": "10.02.17",
       "level": "info",
       "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     },
     {
-      "time": "11:19:56 AM",
+      "time": "10.02.15",
       "level": "info",
       "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     },
     {
-      "time": "11:16:37 AM",
+      "time": "09.57.06",
       "level": "info",
-      "msg": "AI pulih setelah recovery. Scheduler dilanjutkan."
+      "msg": "[SOLUSDT] Scan: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
     },
     {
-      "time": "11:13:04 AM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "10:54:07 AM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
-    },
-    {
-      "time": "8:30:48 AM",
+      "time": "09.57.01",
       "level": "info",
-      "msg": "SELL BTCUSDT (TREND_BREAK_EXIT) @ 60094.29 | LOSS -0.73%"
+      "msg": "[ETHUSDT] Scan: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
     },
     {
-      "time": "8:18:29 AM",
+      "time": "09.56.56",
       "level": "info",
-      "msg": "AI pulih setelah recovery. Scheduler dilanjutkan."
+      "msg": "Bot dilanjutkan."
     },
     {
-      "time": "8:16:06 AM",
-      "level": "error",
-      "msg": "FAIL-SAFE AI: Timeout 60s saat akses bootoh-ai-developmet.up.railway.app (cek ulang 90s)"
+      "time": "09.56.53",
+      "level": "info",
+      "msg": "[BTCUSDT] Scan: Sistem=WAIT(0) AI=WAIT(50%) -> Gabungan=0%"
     },
     {
-      "time": "6:01:55 AM",
-      "level": "warn",
-      "msg": "Gagal update harga: Gagal ambil harga (BTCUSDT): tokocrypto: fetch failed (ENOTFOUND) | binance_vision: fetch failed (ENOTFOUND) | okx: fetch failed (ENOTFOUND) | binance: fetch failed (ENOTFOUND)"
+      "time": "09.56.09",
+      "level": "info",
+      "msg": "Pengaturan diperbarui (PAPER • BTCUSDT 15m • AI ollama/qwen2.5:3b)."
     },
     {
-      "time": "6:01:50 AM",
-      "level": "error",
-      "msg": "Error scan: Semua sumber klines gagal (BTCUSDT): tokocrypto: fetch failed (ENOTFOUND) | binance_vision: fetch failed (ENOTFOUND) | okx: fetch failed (ENOTFOUND) | binance: fetch failed (ENOTFOUND)"
+      "time": "09.55.38",
+      "level": "info",
+      "msg": "Bot dijeda manual."
     },
     {
-      "time": "6:01:45 AM",
-      "level": "warn",
-      "msg": "Gagal update harga: Gagal ambil harga (BTCUSDT): tokocrypto: fetch failed (ENOTFOUND) | binance_vision: fetch failed (ENOTFOUND) | okx: fetch failed (ENOTFOUND) | binance: fetch failed (ENOTFOUND)"
+      "time": "09.55.23",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     },
     {
-      "time": "6:01:36 AM",
-      "level": "error",
-      "msg": "Error scan: Semua sumber klines gagal (BTCUSDT): tokocrypto: fetch failed (ENOTFOUND) | binance_vision: fetch failed (ENOTFOUND) | okx: fetch failed (ENOTFOUND) | binance: fetch failed (ENOTFOUND)"
+      "time": "09.52.13",
+      "level": "info",
+      "msg": "Pengaturan diperbarui (PAPER • BTCUSDT 15m • AI ollama/qwen2.5:3b)."
     },
     {
-      "time": "6:01:36 AM",
-      "level": "warn",
-      "msg": "Gagal update harga: Gagal ambil harga (BTCUSDT): tokocrypto: fetch failed (ENOTFOUND) | binance_vision: fetch failed (ENOTFOUND) | okx: fetch failed (ENOTFOUND) | binance: fetch failed (ENOTFOUND)"
+      "time": "09.51.23",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.51.17",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.48.46",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.48.44",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.48.43",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.48.41",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.48.39",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
+    },
+    {
+      "time": "09.48.21",
+      "level": "info",
+      "msg": "Tokocrypto AI Spot Bot aktif di http://0.0.0.0:3456"
     }
-  ]
+  ],
+  "bots": {
+    "BTCUSDT": {
+      "symbol": "BTCUSDT",
+      "lastPrice": 61744.97,
+      "priceSource": "binance_vision",
+      "lastUpdatedAt": 1795404284451,
+      "lastClosedCandleTime": 1795403699999,
+      "lastAnalysis": {
+        "ready": true,
+        "closedCandleTime": 1795403699999,
+        "lastClose": 61159.3,
+        "trend": "DOWNTREND",
+        "ema9": 60898.344811702395,
+        "ema21": 60947.808625582984,
+        "ema50": 60861.842548326575,
+        "rsi": 56.28272026582565,
+        "rsiPrev": 38.032589304364215,
+        "bollinger": {
+          "upper": 61463.52983202049,
+          "middle": 61017.6385,
+          "lower": 60571.74716797951,
+          "stdDev": 222.94566601024235,
+          "percentB": 0.6588520451362943
+        },
+        "atr": 292.9235714285704,
+        "atrPct": 0.47895180525050224,
+        "er": 0.0008126523723216234,
+        "volRatio": 1.2942216489986091,
+        "support20": 60386,
+        "resistance20": 61464.35,
+        "distToResistancePct": 0.4987794170305998,
+        "distToSupportPct": 1.264402960792558,
+        "candleColor": "GREEN",
+        "rejection": "NONE",
+        "proposal": "WAIT",
+        "setupType": "NO_SETUP",
+        "score": 0,
+        "signals": [],
+        "warnings": [
+          "Belum ada setup BUY (DOWNTREND, RSI 56, %B 66%)"
+        ]
+      },
+      "lastAiDecision": {
+        "decision": "WAIT",
+        "confidence": 0,
+        "combinedScore": 0,
+        "systemProposal": "WAIT",
+        "systemScore": 0,
+        "risk": "LOW",
+        "reason": "[BTCUSDT] DOWNTREND | RSI 56.3 | %B 66% — Belum ada setup BUY (DOWNTREND, RSI 56, %B 66%)",
+        "at": 1795403705311
+      },
+      "position": null
+    },
+    "ETHUSDT": {
+      "symbol": "ETHUSDT",
+      "lastPrice": 1740.9,
+      "priceSource": "binance_vision",
+      "lastUpdatedAt": 1795404284451,
+      "lastClosedCandleTime": 1795403699999,
+      "lastAnalysis": {
+        "ready": true,
+        "closedCandleTime": 1795403699999,
+        "lastClose": 1722.21,
+        "trend": "DOWNTREND",
+        "ema9": 1712.879613882379,
+        "ema21": 1714.9852683486554,
+        "ema50": 1713.2433888395365,
+        "rsi": 57.42679986689162,
+        "rsiPrev": 37.95382289092369,
+        "bollinger": {
+          "upper": 1729.037809949767,
+          "middle": 1716.336,
+          "lower": 1703.634190050233,
+          "stdDev": 6.350904974883504,
+          "percentB": 0.7312268890508694
+        },
+        "atr": 8.711428571428542,
+        "atrPct": 0.5058284745430894,
+        "er": 0.10263788968824976,
+        "volRatio": 1.3984215035964533,
+        "support20": 1696.5,
+        "resistance20": 1727.6,
+        "distToResistancePct": 0.3129699630126333,
+        "distToSupportPct": 1.4928493040918376,
+        "candleColor": "GREEN",
+        "rejection": "NONE",
+        "proposal": "WAIT",
+        "setupType": "NO_SETUP",
+        "score": 0,
+        "signals": [],
+        "warnings": [
+          "Belum ada setup BUY (DOWNTREND, RSI 57, %B 73%)"
+        ]
+      },
+      "lastAiDecision": {
+        "decision": "WAIT",
+        "confidence": 0,
+        "combinedScore": 0,
+        "systemProposal": "WAIT",
+        "systemScore": 0,
+        "risk": "LOW",
+        "reason": "[ETHUSDT] DOWNTREND | RSI 57.4 | %B 73% — Belum ada setup BUY (DOWNTREND, RSI 57, %B 73%)",
+        "at": 1795403705311
+      },
+      "position": null
+    },
+    "SOLUSDT": {
+      "symbol": "SOLUSDT",
+      "lastPrice": 71.6,
+      "priceSource": "binance_vision",
+      "lastUpdatedAt": 1795404284451,
+      "lastClosedCandleTime": 1795403699999,
+      "lastAnalysis": {
+        "ready": true,
+        "closedCandleTime": 1795403699999,
+        "lastClose": 71,
+        "trend": "SIDEWAYS",
+        "ema9": 70.509704452358,
+        "ema21": 70.48324145717972,
+        "ema50": 70.39976346220446,
+        "rsi": 62.28333068483474,
+        "rsiPrev": 45.170124452296164,
+        "bollinger": {
+          "upper": 70.99975994237234,
+          "middle": 70.5,
+          "lower": 70.00024005762766,
+          "stdDev": 0.2498799711861679,
+          "percentB": 1.0002401729383559
+        },
+        "atr": 0.355714285714285,
+        "atrPct": 0.5010060362173028,
+        "er": 0.24352331606217473,
+        "volRatio": 4.143160045929452,
+        "support20": 69.89,
+        "resistance20": 71.14,
+        "distToResistancePct": 0.19718309859155012,
+        "distToSupportPct": 1.5633802816901399,
+        "candleColor": "GREEN",
+        "rejection": "NONE",
+        "proposal": "WAIT",
+        "setupType": "NO_SETUP",
+        "score": 0,
+        "signals": [],
+        "warnings": [
+          "Belum ada setup BUY (SIDEWAYS, RSI 62, %B 100%)"
+        ]
+      },
+      "lastAiDecision": {
+        "decision": "WAIT",
+        "confidence": 0,
+        "combinedScore": 0,
+        "systemProposal": "WAIT",
+        "systemScore": 0,
+        "risk": "LOW",
+        "reason": "[SOLUSDT] SIDEWAYS | RSI 62.3 | %B 100% — Belum ada setup BUY (SIDEWAYS, RSI 62, %B 100%)",
+        "at": 1795403705311
+      },
+      "position": null
+    }
+  }
 }

@@ -4,7 +4,8 @@
   "description": "Tokocrypto AI Spot Trading Bot (Zero-Dependency Node.js + Web Dashboard)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --watch-preserve-output --watch-path=server.js --watch-path=lib --watch-path=.env server.js",
+    "start:prod": "node server.js"
   },
   "dependencies": {}
 }

@@ -24,7 +24,7 @@ if (fs.existsSync(localEnvPath)) {
   } catch (_) {}
 }
 
-const { getKlines, getTickerPrice, getAccountBalances, placeLiveOrder, splitSymbol } = require("./lib/tokocrypto");
+const { getKlines, getTickerPrice, getUsdIdrRate, getAccountBalances, placeLiveOrder, splitSymbol } = require("./lib/tokocrypto");
 const { analyzeCandles } = require("./lib/strategy");
 const { validateWithAI, normalizeOllamaEndpoint, testAiConnection } = require("./lib/ai");
 const { sendDiscord } = require("./lib/discord");
@@ -40,8 +40,24 @@ const {
 
 const PORT = Number(process.env.PORT || 3456);
 const DATA_DIR = path.join(__dirname, "data");
+const REPORTS_DIR = path.join(__dirname, "reports");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 const PUBLIC_HTML = path.join(__dirname, "public", "index.html");
+const PARALLEL_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
+
+function createBotSlot(symbol) {
+  return {
+    symbol,
+    lastPrice: null,
+    priceSource: "-",
+    lastUpdatedAt: 0,
+    lastClosedCandleTime: 0,
+    lastAnalysis: null,
+    lastAiDecision: null,
+    candles: [],
+    position: null
+  };
+}
 
 const DEFAULT_CONFIG = {
   mode: process.env.BOT_MODE || "paper", // "paper" | "live"
@@ -56,6 +72,7 @@ const DEFAULT_CONFIG = {
   feePct: 0.15,
   minConfidence: 70,
   maxDailyLossPct: 5.0,
+  dailyTargetIdr: 300000,
   aiProvider: process.env.AI_PROVIDER || "ollama",
   aiModel: process.env.AI_MODEL || "qwen2.5:3b",
   aiApiKey: process.env.AI_API_KEY || "",
@@ -81,16 +98,21 @@ function createInitialState() {
     liveQuoteBalance: null,
     liveBaseBalance: null,
     dailyPnlQuote: 0,
-    dailyPnlDate: new Date().toISOString().slice(0, 10),
+    dailyPnlDate: getLocalDateStr(),
+    dailyHistory: [], // { date, targetIdr, targetQuote, pnlQuote, pnlIdr, trades, wins, losses, achieved }
+    symbols: [...PARALLEL_SYMBOLS],
+    bots: Object.fromEntries(PARALLEL_SYMBOLS.map((s) => [s, createBotSlot(s)])),
     position: null, // { symbol, qty, entryPrice, costQuote, entryTime, highestPrice, stopLossPrice, takeProfitPrice, trailingActive, setupType, mode }
     lastPrice: null,
     usdtIdrRate: 16250,
+    usdtIdrSource: "-",
+    usdtIdrUpdatedAt: 0,
     priceSource: "-",
     lastUpdatedAt: 0,
     lastClosedCandleTime: 0,
     lastAnalysis: null,
     lastAiDecision: null,
-    candles: [], // 60 candle terakhir untuk grafik candlestick di dashboard (in-memory)
+    candles: [], // hingga 150 candle terakhir untuk grafik candlestick di dashboard (in-memory)
     aiGuard: { locked: false, reason: "", retryAt: 0, failCount: 0 },
     history: [], // { time, exitTime, symbol, mode, entryPrice, exitPrice, qty, pnlQuote, pnlPct, reason, status }
     logs: []
@@ -116,29 +138,62 @@ async function refreshLiveBalanceIfNeeded(force = false) {
   }
 }
 
-async function refreshUsdtIdrRate() {
-  if (Date.now() - lastIdrFetchAt < 300000) return;
+async function refreshUsdtIdrRate(force = false) {
+  if (!force && Date.now() - lastIdrFetchAt < 300000) return;
   lastIdrFetchAt = Date.now();
   try {
-    const tick = await getTickerPrice("USDTIDR");
-    if (tick && tick.price > 10000 && tick.price < 25000) {
-      state.usdtIdrRate = tick.price;
-    }
-  } catch (_) {
+    const res = await getUsdIdrRate();
+    state.usdtIdrRate = res.rate;
+    state.usdtIdrSource = res.source;
+    state.usdtIdrUpdatedAt = Date.now();
+    saveState();
+  } catch (err) {
     if (!state.usdtIdrRate) state.usdtIdrRate = 16250;
+    addLog(`Gagal update kurs USD/IDR: ${err.message}`, "warn");
   }
+}
+
+function formatDateTime(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "-";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
       const parsed = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-      return {
-        ...createInitialState(),
+      const base = createInitialState();
+      const merged = {
+        ...base,
         ...parsed,
         config: { ...DEFAULT_CONFIG, ...(parsed.config || {}) },
         aiGuard: { locked: false, reason: "", retryAt: 0, failCount: 0 }
       };
+      const bots = {};
+      for (const sym of PARALLEL_SYMBOLS) {
+        const savedBot = parsed.bots && parsed.bots[sym] ? parsed.bots[sym] : {};
+        bots[sym] = { ...createBotSlot(sym), ...savedBot, symbol: sym, candles: [] };
+      }
+      // Migrasi posisi/harga lama ke slot bot masing-masing jika belum ada
+      const primarySym = PARALLEL_SYMBOLS.includes(merged.config.symbol) ? merged.config.symbol : "BTCUSDT";
+      if (!parsed.bots) {
+        if (merged.position && bots[merged.position.symbol]) {
+          bots[merged.position.symbol].position = merged.position;
+        }
+        if (merged.lastPrice && bots[primarySym]) {
+          bots[primarySym].lastPrice = merged.lastPrice;
+          bots[primarySym].priceSource = merged.priceSource || "-";
+          bots[primarySym].lastUpdatedAt = merged.lastUpdatedAt || 0;
+          bots[primarySym].lastClosedCandleTime = merged.lastClosedCandleTime || 0;
+          bots[primarySym].lastAnalysis = merged.lastAnalysis || null;
+          bots[primarySym].lastAiDecision = merged.lastAiDecision || null;
+        }
+      }
+      merged.bots = bots;
+      merged.symbols = [...PARALLEL_SYMBOLS];
+      return merged;
     }
   } catch (_) { }
   return createInitialState();
@@ -147,9 +202,97 @@ function loadState() {
 function saveState() {
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    const { candles, ...persisted } = state;
-    fs.writeFileSync(STATE_FILE, JSON.stringify(persisted, null, 2));
+    const { candles, bots, ...persisted } = state;
+    const cleanBots = {};
+    for (const sym of PARALLEL_SYMBOLS) {
+      const b = (bots && bots[sym]) || createBotSlot(sym);
+      const { candles: _bc, ...restBot } = b;
+      cleanBots[sym] = restBot;
+    }
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ ...persisted, bots: cleanBots }, null, 2));
+    saveReports();
   } catch (_) { }
+}
+
+function saveReports() {
+  try {
+    if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true });
+    const idrRate = getActiveIdrRate();
+    const dailyList = Array.isArray(state.dailyHistory) ? state.dailyHistory : [];
+    const tradeList = Array.isArray(state.history) ? state.history : [];
+    const nowIso = new Date().toISOString();
+    const todayKey = state.dailyPnlDate || getLocalDateStr();
+
+    // 1. Rekap Harian (reports/rekap_harian.json)
+    const dailySummary = dailyList.reduce(
+      (acc, d) => {
+        acc.totalDays += 1;
+        if (d.achieved) acc.achievedDays += 1;
+        acc.totalTargetIdr += Number(d.targetIdr) || 0;
+        acc.totalPnlIdr += Number(d.pnlIdr) || 0;
+        acc.totalPnlQuote += Number(d.pnlQuote) || 0;
+        acc.totalTrades += Number(d.trades) || 0;
+        acc.totalWins += Number(d.wins) || 0;
+        acc.totalLosses += Number(d.losses) || 0;
+        return acc;
+      },
+      { totalDays: 0, achievedDays: 0, totalTargetIdr: 0, totalPnlIdr: 0, totalPnlQuote: 0, totalTrades: 0, totalWins: 0, totalLosses: 0 }
+    );
+    dailySummary.winratePct = dailySummary.totalTrades > 0 ? Math.round((dailySummary.totalWins / dailySummary.totalTrades) * 1000) / 10 : 0;
+
+    fs.writeFileSync(
+      path.join(REPORTS_DIR, "rekap_harian.json"),
+      JSON.stringify({ updatedAt: nowIso, usdtIdrRate: idrRate, summary: dailySummary, days: dailyList }, null, 2)
+    );
+
+    // 2. Rekap Trade (reports/rekap_trade.json) — arsip hingga 500 trade terbaru
+    const tradeFile = path.join(REPORTS_DIR, "rekap_trade.json");
+    let archivedTrades = [];
+    if (fs.existsSync(tradeFile)) {
+      try {
+        const prev = JSON.parse(fs.readFileSync(tradeFile, "utf8"));
+        if (Array.isArray(prev.trades)) archivedTrades = prev.trades;
+      } catch (_) {}
+    }
+    const seenKeys = new Set(tradeList.map((t) => `${t.symbol}_${t.entryTimestamp || t.time}_${t.exitTimestamp || t.exitTime}`));
+    const mergedTrades = [...tradeList];
+    for (const old of archivedTrades) {
+      const k = `${old.symbol}_${old.entryTimestamp || old.time}_${old.exitTimestamp || old.exitTime}`;
+      if (!seenKeys.has(k)) {
+        seenKeys.add(k);
+        mergedTrades.push(old);
+      }
+    }
+    if (mergedTrades.length > 500) mergedTrades.length = 500;
+
+    const tWins = mergedTrades.filter((t) => t.status === "WIN").length;
+    const tTotal = mergedTrades.length;
+    const tPnlQuote = mergedTrades.reduce((s, t) => s + (Number(t.pnlQuote) || 0), 0);
+    const tradeSummary = {
+      totalTrades: tTotal,
+      wins: tWins,
+      losses: tTotal - tWins,
+      winratePct: tTotal > 0 ? Math.round((tWins / tTotal) * 1000) / 10 : 0,
+      totalPnlQuote: tPnlQuote,
+      totalPnlIdr: tPnlQuote * idrRate
+    };
+
+    fs.writeFileSync(
+      tradeFile,
+      JSON.stringify({ updatedAt: nowIso, usdtIdrRate: idrRate, summary: tradeSummary, trades: mergedTrades }, null, 2)
+    );
+
+    // 3. Snapshot per tanggal (reports/harian_YYYY-MM-DD.json)
+    const todayRec = dailyList.find((d) => d.date === todayKey) || null;
+    const todayTrades = mergedTrades.filter((t) => {
+      if (t.exitTimestamp) return getLocalDateStr(t.exitTimestamp) === todayKey;
+      return false;
+    });
+    fs.writeFileSync(
+      path.join(REPORTS_DIR, `harian_${todayKey}.json`),
+      JSON.stringify({ updatedAt: nowIso, date: todayKey, usdtIdrRate: idrRate, daily: todayRec, trades: todayTrades }, null, 2)
+    );
+  } catch (_) {}
 }
 
 function addLog(msg, level = "info") {
@@ -163,11 +306,66 @@ function addLog(msg, level = "info") {
   console.log(`[${entry.time}] [${level.toUpperCase()}] ${entry.msg}`);
 }
 
+function getLocalDateStr(ts = Date.now()) {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function getActiveIdrRate() {
+  const { quote } = splitSymbol(state.config.symbol);
+  return quote === "IDR" || quote === "BIDR" ? 1 : Number(state.usdtIdrRate) || 16250;
+}
+
+function syncTodayDailyHistory({ tradeStatus = null } = {}) {
+  if (!Array.isArray(state.dailyHistory)) state.dailyHistory = [];
+  const dateKey = state.dailyPnlDate || getLocalDateStr();
+  const idrRate = getActiveIdrRate();
+  const targetIdr = Math.max(0, Number(state.config.dailyTargetIdr) || 0);
+  const pnlQuote = Number(state.dailyPnlQuote) || 0;
+  const pnlIdr = pnlQuote * idrRate;
+  const targetQuote = idrRate > 0 ? targetIdr / idrRate : 0;
+
+  let entry = state.dailyHistory.find((d) => d.date === dateKey);
+  if (!entry) {
+    entry = {
+      date: dateKey,
+      targetIdr,
+      targetQuote,
+      pnlQuote: 0,
+      pnlIdr: 0,
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      achieved: false
+    };
+    state.dailyHistory.unshift(entry);
+  }
+
+  entry.targetIdr = targetIdr;
+  entry.targetQuote = targetQuote;
+  entry.pnlQuote = pnlQuote;
+  entry.pnlIdr = pnlIdr;
+  if (tradeStatus === "WIN") {
+    entry.trades += 1;
+    entry.wins += 1;
+  } else if (tradeStatus === "LOSS") {
+    entry.trades += 1;
+    entry.losses += 1;
+  }
+  entry.achieved = targetIdr > 0 ? entry.pnlIdr >= targetIdr : false;
+
+  state.dailyHistory.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  if (state.dailyHistory.length > 90) state.dailyHistory.length = 90;
+}
+
 function resetDailyIfNeeded() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateStr();
   if (state.dailyPnlDate !== today) {
+    syncTodayDailyHistory();
     state.dailyPnlDate = today;
     state.dailyPnlQuote = 0;
+    syncTodayDailyHistory();
   }
 }
 
@@ -178,14 +376,17 @@ function notify(payload) {
 }
 
 // ---------- Eksekusi BUY & SELL (Paper & Live) ----------
-async function openBuyPosition(price, analysis, aiDecision) {
+async function openBuyPosition(symbol, price, analysis, aiDecision) {
+  const sym = PARALLEL_SYMBOLS.includes(symbol) ? symbol : "BTCUSDT";
+  const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
+  if (bot.position) return false;
   const cfg = state.config;
-  const { base, quote } = splitSymbol(cfg.symbol);
+  const { base, quote } = splitSymbol(sym);
   const spendQuote = Number(cfg.orderSizeQuote) || 100;
 
   if (cfg.mode === "paper") {
     if (state.paperBalance < spendQuote) {
-      addLog(`Saldo paper (${state.paperBalance.toFixed(2)} ${quote}) kurang dari order size (${spendQuote}).`, "warn");
+      addLog(`[${sym}] Saldo paper (${state.paperBalance.toFixed(2)} ${quote}) kurang dari order size (${spendQuote}).`, "warn");
       return false;
     }
     const feeQuote = spendQuote * ((Number(cfg.feePct) || 0.15) / 100);
@@ -193,8 +394,8 @@ async function openBuyPosition(price, analysis, aiDecision) {
     const qty = netQuote / price;
     state.paperBalance -= spendQuote;
 
-    state.position = {
-      symbol: cfg.symbol,
+    bot.position = {
+      symbol: sym,
       base,
       quote,
       mode: "paper",
@@ -209,11 +410,11 @@ async function openBuyPosition(price, analysis, aiDecision) {
       setupType: analysis.setupType
     };
   } else {
-    const orderRes = await placeLiveOrder(cfg, "BUY", { quoteOrderQty: spendQuote });
+    const orderRes = await placeLiveOrder({ ...cfg, symbol: sym }, "BUY", { quoteOrderQty: spendQuote });
     await refreshLiveBalanceIfNeeded(true);
-    const execQty = Number(orderRes?.data?.executedQty) || state.liveBaseBalance || (spendQuote * 0.9985) / price;
-    state.position = {
-      symbol: cfg.symbol,
+    const execQty = Number(orderRes?.data?.executedQty) || (spendQuote * 0.9985) / price;
+    bot.position = {
+      symbol: sym,
       base,
       quote,
       mode: "live",
@@ -229,25 +430,28 @@ async function openBuyPosition(price, analysis, aiDecision) {
     };
   }
 
+  if (sym === state.config.symbol) state.position = bot.position;
   saveState();
-  addLog(`BUY ${cfg.symbol} (${cfg.mode.toUpperCase()}) @ ${price} | SL ${state.position.stopLossPrice.toFixed(2)} | TP ${state.position.takeProfitPrice.toFixed(2)}`);
+  addLog(`BUY ${sym} (${cfg.mode.toUpperCase()}) @ ${price} | SL ${bot.position.stopLossPrice.toFixed(2)} | TP ${bot.position.takeProfitPrice.toFixed(2)}`);
 
   notify({
     kind: "BUY",
-    title: `🟢 BUY ${cfg.symbol} (${cfg.mode.toUpperCase()})`,
+    title: `🟢 BUY ${sym} (${cfg.mode.toUpperCase()})`,
     description: aiDecision ? aiDecision.reason : analysis.signals.join("; "),
     fields: [
       { name: "Harga Masuk", value: String(price), inline: true },
-      { name: "Stop Loss", value: `${state.position.stopLossPrice.toFixed(2)} (-${cfg.stopLossPct}%)`, inline: true },
-      { name: "Take Profit", value: `${state.position.takeProfitPrice.toFixed(2)} (+${cfg.takeProfitPct}%)`, inline: true },
+      { name: "Stop Loss", value: `${bot.position.stopLossPrice.toFixed(2)} (-${cfg.stopLossPct}%)`, inline: true },
+      { name: "Take Profit", value: `${bot.position.takeProfitPrice.toFixed(2)} (+${cfg.takeProfitPct}%)`, inline: true },
       { name: "Setup", value: analysis.setupType, inline: true }
     ]
   });
   return true;
 }
 
-async function closePosition(exitPrice, exitReason) {
-  const pos = state.position;
+async function closePosition(symbol, exitPrice, exitReason) {
+  const sym = PARALLEL_SYMBOLS.includes(symbol) ? symbol : "BTCUSDT";
+  const bot = state.bots[sym];
+  const pos = bot ? bot.position : null;
   if (!pos) return false;
   const cfg = state.config;
 
@@ -262,7 +466,7 @@ async function closePosition(exitPrice, exitReason) {
     pnlPct = (pnlQuote / pos.costQuote) * 100;
     state.paperBalance += netProceeds;
   } else {
-    await placeLiveOrder(cfg, "SELL", { quantity: pos.qty });
+    await placeLiveOrder({ ...cfg, symbol: sym }, "SELL", { quantity: pos.qty });
     await refreshLiveBalanceIfNeeded(true);
     const grossProceeds = pos.qty * exitPrice;
     const feeQuote = grossProceeds * ((Number(cfg.feePct) || 0.15) / 100);
@@ -273,10 +477,15 @@ async function closePosition(exitPrice, exitReason) {
   resetDailyIfNeeded();
   state.dailyPnlQuote += pnlQuote;
 
+  const entryTs = pos.entryTime || Date.now();
+  const exitTs = Date.now();
   const status = pnlQuote >= 0 ? "WIN" : "LOSS";
+  syncTodayDailyHistory({ tradeStatus: status });
   const record = {
-    time: new Date(pos.entryTime).toLocaleTimeString(),
-    exitTime: new Date().toLocaleTimeString(),
+    time: formatDateTime(entryTs),
+    exitTime: formatDateTime(exitTs),
+    entryTimestamp: entryTs,
+    exitTimestamp: exitTs,
     symbol: pos.symbol,
     mode: pos.mode,
     entryPrice: pos.entryPrice,
@@ -290,7 +499,8 @@ async function closePosition(exitPrice, exitReason) {
 
   state.history.unshift(record);
   if (state.history.length > 60) state.history.pop();
-  state.position = null;
+  bot.position = null;
+  if (sym === state.config.symbol) state.position = null;
 
   // Cek batas rugi harian
   const maxDailyLossQuote = (Number(cfg.paperInitialBalance) || 1000) * ((Number(cfg.maxDailyLossPct) || 5) / 100);
@@ -319,25 +529,29 @@ async function closePosition(exitPrice, exitReason) {
   return true;
 }
 
-// ---------- Monitor Harga & TP / SL / Trailing Stop (Tiap 10 Detik) ----------
-async function checkPriceAndRisk() {
+// ---------- Monitor Harga & TP / SL / Trailing Stop (Tiap 10 Detik, Paralel 3 Pair) ----------
+async function checkBotPriceAndRisk(sym) {
+  const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
   try {
-    refreshUsdtIdrRate();
-    refreshLiveBalanceIfNeeded(false);
-    const tick = await getTickerPrice(state.config.symbol);
-    state.lastPrice = tick.price;
-    state.priceSource = tick.source;
-    state.lastUpdatedAt = Date.now();
+    const tick = await getTickerPrice(sym);
+    bot.lastPrice = tick.price;
+    bot.priceSource = tick.source;
+    bot.lastUpdatedAt = Date.now();
 
-    // Update candle terakhir secara live agar grafik bergerak tiap 10 detik
-    if (Array.isArray(state.candles) && state.candles.length > 0) {
-      const lastC = state.candles[state.candles.length - 1];
+    if (sym === state.config.symbol) {
+      state.lastPrice = tick.price;
+      state.priceSource = tick.source;
+      state.lastUpdatedAt = bot.lastUpdatedAt;
+    }
+
+    if (Array.isArray(bot.candles) && bot.candles.length > 0) {
+      const lastC = bot.candles[bot.candles.length - 1];
       lastC.close = tick.price;
       if (tick.price > lastC.high) lastC.high = tick.price;
       if (tick.price < lastC.low) lastC.low = tick.price;
     }
 
-    const pos = state.position;
+    const pos = bot.position;
     if (!pos) return;
 
     const p = tick.price;
@@ -356,129 +570,177 @@ async function checkPriceAndRisk() {
     }
 
     if (p >= pos.takeProfitPrice) {
-      await closePosition(p, "TAKE_PROFIT");
+      await closePosition(sym, p, "TAKE_PROFIT");
     } else if (p <= pos.stopLossPrice) {
-      await closePosition(p, pos.trailingActive ? "TRAILING_STOP" : "STOP_LOSS");
+      await closePosition(sym, p, pos.trailingActive ? "TRAILING_STOP" : "STOP_LOSS");
     }
   } catch (err) {
-    addLog(`Gagal update harga: ${err.message}`, "warn");
+    addLog(`[${sym}] Gagal update harga: ${err.message}`, "warn");
   }
 }
 
-// ---------- Scanner Strategi & AI Validator ----------
-async function runMarketScan(manual = false) {
+async function checkPriceAndRisk() {
+  refreshUsdtIdrRate();
+  refreshLiveBalanceIfNeeded(false);
+  await Promise.allSettled(PARALLEL_SYMBOLS.map((sym) => checkBotPriceAndRisk(sym)));
+}
+
+// ---------- Scanner Strategi & AI Validator (Paralel 3 Pair: BTC, ETH, SOL) ----------
+async function runMarketScan(manual = false, targetSymbol = null) {
   if (busyScan) return { ok: false, message: "Scan sedang berjalan." };
   busyScan = true;
   try {
-    const cfg = state.config;
     const now = Date.now();
-
-    // Cek Fail-Safe AI 90 detik
     const isRecovery = state.aiGuard.locked && now >= state.aiGuard.retryAt;
     if (state.aiGuard.locked && !isRecovery && !manual) {
       return { ok: true, message: "AI dalam masa jeda recovery 90s." };
     }
 
-    const kl = await getKlines(cfg.symbol, cfg.interval, 80);
-    state.priceSource = kl.source;
-    state.candles = kl.candles.slice(-60);
-    if (kl.candles.length > 0) {
-      state.lastPrice = kl.candles[kl.candles.length - 1].close;
-      state.lastUpdatedAt = now;
+    const targets = targetSymbol && PARALLEL_SYMBOLS.includes(targetSymbol) ? [targetSymbol] : PARALLEL_SYMBOLS;
+    const cfg = state.config;
+
+    // 1. Ambil klines & analisa teknikal untuk ke-3 pair secara paralel sekaligus
+    const klineResults = await Promise.allSettled(
+      targets.map(async (sym) => {
+        const kl = await getKlines(sym, cfg.interval, 160);
+        const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
+        bot.priceSource = kl.source;
+        bot.candles = kl.candles.slice(-150);
+        if (kl.candles.length > 0) {
+          bot.lastPrice = kl.candles[kl.candles.length - 1].close;
+          bot.lastUpdatedAt = now;
+        }
+        const analysis = analyzeCandles(kl.candles, Boolean(bot.position));
+        bot.lastAnalysis = analysis;
+        return { sym, kl, analysis, bot };
+      })
+    );
+
+    const summaries = [];
+    const aiQueue = [];
+
+    for (let i = 0; i < targets.length; i++) {
+      const sym = targets[i];
+      const res = klineResults[i];
+      if (res.status === "rejected") {
+        const errMsg = res.reason?.message || "Gagal ambil candle";
+        addLog(`[${sym}] Scan gagal: ${errMsg}`, "warn");
+        summaries.push(`${sym}: ERR`);
+        continue;
+      }
+
+      const { kl, analysis, bot } = res.value;
+      if (!analysis.ready) {
+        addLog(`[${sym}] ${analysis.reason}`, "warn");
+        summaries.push(`${sym}: DATA KURANG`);
+        continue;
+      }
+
+      if (!manual && !isRecovery && analysis.closedCandleTime === bot.lastClosedCandleTime) {
+        summaries.push(`${sym}: ${analysis.trend} (WAIT)`);
+        continue;
+      }
+      bot.lastClosedCandleTime = analysis.closedCandleTime;
+
+      if (analysis.proposal === "WAIT") {
+        const bbPct = analysis.bollinger ? Math.round(analysis.bollinger.percentB * 100) + "%" : "-";
+        bot.lastAiDecision = {
+          decision: "WAIT",
+          confidence: 0,
+          combinedScore: 0,
+          systemProposal: "WAIT",
+          systemScore: 0,
+          risk: "LOW",
+          reason: `[${sym}] ${analysis.trend} | RSI ${analysis.rsi.toFixed(1)} | %B ${bbPct} — ${analysis.warnings[0] || analysis.signals[0] || "Belum ada setup valid."}`,
+          at: now
+        };
+        summaries.push(`${sym}: ${analysis.trend} (WAIT)`);
+        continue;
+      }
+
+      aiQueue.push({ sym, kl, analysis, bot });
     }
 
-    const analysis = analyzeCandles(kl.candles, Boolean(state.position));
-    state.lastAnalysis = analysis;
+    // 2. Validasi AI untuk pair yang punya sinyal BUY/SELL (atau recovery)
+    for (const item of aiQueue) {
+      const { sym, kl, analysis, bot } = item;
+      const symCfg = { ...cfg, symbol: sym };
+      const posView = bot.position
+        ? {
+          ...bot.position,
+          unrealizedPct: ((bot.lastPrice - bot.position.entryPrice) / bot.position.entryPrice) * 100
+        }
+        : null;
 
-    if (!analysis.ready) {
-      addLog(analysis.reason, "warn");
-      return { ok: true, message: analysis.reason };
-    }
-
-    // Jika otomatis (bukan manual & bukan recovery), analisa AI hanya 1x per candle baru tutup
-    if (!manual && !isRecovery && analysis.closedCandleTime === state.lastClosedCandleTime) {
-      return { ok: true, message: "Menunggu candle baru tutup." };
-    }
-    state.lastClosedCandleTime = analysis.closedCandleTime;
-
-    // Jika tidak ada usulan BUY/SELL dari sistem matematis (dan bukan manual/recovery), hemat AI
-    if (analysis.proposal === "WAIT" && !manual && !isRecovery) {
-      state.lastAiDecision = {
-        decision: "WAIT",
-        confidence: 0,
-        risk: "LOW",
-        reason: analysis.warnings[0] || analysis.signals[0] || "Belum ada setup valid.",
-        at: now
+      const idrRate = getActiveIdrRate();
+      const dailyPnlIdr = (Number(state.dailyPnlQuote) || 0) * idrRate;
+      const dailyTargetIdr = Math.max(0, Number(cfg.dailyTargetIdr) || 0);
+      const aiContext = {
+        dailyTargetIdr,
+        dailyPnlIdr,
+        dailyTargetAchieved: dailyTargetIdr > 0 && dailyPnlIdr >= dailyTargetIdr,
+        recentHistory: Array.isArray(state.history) ? state.history.slice(0, 4) : [],
+        recentCandles: Array.isArray(kl.candles) ? kl.candles.slice(-7, -1) : []
       };
-      saveState();
-      return { ok: true, message: "Tidak ada setup valid (WAIT)." };
+
+      let aiRes;
+      try {
+        aiRes = await validateWithAI(symCfg, analysis, posView, aiContext);
+      } catch (aiErr) {
+        const wasLocked = state.aiGuard.locked;
+        state.aiGuard.locked = true;
+        state.aiGuard.reason = aiErr.message || "AI tidak merespons";
+        state.aiGuard.retryAt = Date.now() + 90 * 1000;
+        state.aiGuard.failCount += 1;
+        addLog(`FAIL-SAFE AI (${sym}): ${state.aiGuard.reason} (cek ulang 90s)`, "error");
+        if (!wasLocked || state.aiGuard.failCount % 3 === 0) {
+          notify({
+            kind: "AI_ERROR",
+            title: "🛡️ BID DIHENTIKAN — Issue AI (90s)",
+            description: state.aiGuard.reason
+          });
+        }
+        summaries.push(`${sym}: AI ERR`);
+        if (!manual) break;
+        continue;
+      }
+
+      if (state.aiGuard.locked) {
+        state.aiGuard = { locked: false, reason: "", retryAt: 0, failCount: 0 };
+        addLog("AI pulih setelah recovery. Scheduler dilanjutkan.");
+        notify({ kind: "RECOVERY", title: "✅ AI Pulih — Bot Aktif Kembali", description: "Koneksi AI kembali normal." });
+      }
+
+      const combinedScore =
+        aiRes.decision === analysis.proposal && analysis.proposal !== "WAIT"
+          ? Math.round(0.6 * analysis.score + 0.4 * aiRes.confidence)
+          : 0;
+
+      bot.lastAiDecision = {
+        ...aiRes,
+        combinedScore,
+        systemProposal: analysis.proposal,
+        systemScore: analysis.score,
+        at: Date.now()
+      };
+
+      if (state.running || manual) {
+        const minConf = Number(cfg.minConfidence) || 70;
+        if (aiRes.decision === "BUY" && !bot.position && combinedScore >= minConf) {
+          await openBuyPosition(sym, bot.lastPrice, analysis, bot.lastAiDecision);
+        } else if (aiRes.decision === "SELL" && bot.position && combinedScore >= minConf) {
+          await closePosition(sym, bot.lastPrice, analysis.setupType || "AI_EXIT");
+        }
+      }
+      summaries.push(`${sym}: ${aiRes.decision} (${combinedScore}%)`);
     }
 
-    const posView = state.position
-      ? {
-        ...state.position,
-        unrealizedPct: ((state.lastPrice - state.position.entryPrice) / state.position.entryPrice) * 100
-      }
-      : null;
-
-    let aiRes;
-    try {
-      aiRes = await validateWithAI(cfg, analysis, posView);
-    } catch (aiErr) {
-      const wasLocked = state.aiGuard.locked;
-      state.aiGuard.locked = true;
-      state.aiGuard.reason = aiErr.message || "AI tidak merespons";
-      state.aiGuard.retryAt = Date.now() + 90 * 1000;
-      state.aiGuard.failCount += 1;
-      addLog(`FAIL-SAFE AI: ${state.aiGuard.reason} (cek ulang 90s)`, "error");
-      if (!wasLocked || state.aiGuard.failCount % 3 === 0) {
-        notify({
-          kind: "AI_ERROR",
-          title: "🛡️ BID DIHENTIKAN — Issue AI (90s)",
-          description: state.aiGuard.reason
-        });
-      }
-      saveState();
-      return { ok: false, message: state.aiGuard.reason };
-    }
-
-    // AI berhasil merespons
-    if (state.aiGuard.locked) {
-      state.aiGuard = { locked: false, reason: "", retryAt: 0, failCount: 0 };
-      addLog("AI pulih setelah recovery. Scheduler dilanjutkan.");
-      notify({ kind: "RECOVERY", title: "✅ AI Pulih — Bot Aktif Kembali", description: "Koneksi AI kembali normal." });
-      if (isRecovery) {
-        saveState();
-        return { ok: true, message: "Recovery AI berhasil." };
-      }
-    }
-
-    const combinedScore =
-      aiRes.decision === analysis.proposal && analysis.proposal !== "WAIT"
-        ? Math.round(0.6 * analysis.score + 0.4 * aiRes.confidence)
-        : 0;
-
-    state.lastAiDecision = {
-      ...aiRes,
-      combinedScore,
-      systemProposal: analysis.proposal,
-      systemScore: analysis.score,
-      at: Date.now()
-    };
-
-    if (state.running || manual) {
-      const minConf = Number(cfg.minConfidence) || 70;
-      if (aiRes.decision === "BUY" && !state.position && combinedScore >= minConf) {
-        await openBuyPosition(state.lastPrice, analysis, state.lastAiDecision);
-      } else if (aiRes.decision === "SELL" && state.position && combinedScore >= minConf) {
-        await closePosition(state.lastPrice, analysis.setupType || "AI_EXIT");
-      } else {
-        addLog(`Scan selesai: Sistem=${analysis.proposal}(${analysis.score}) AI=${aiRes.decision}(${aiRes.confidence}%) -> Gabungan=${combinedScore}%`);
-      }
+    if (manual) {
+      addLog(`Scan Manual 3 Pair: ${summaries.join(" | ")}`);
     }
 
     saveState();
-    return { ok: true, message: `Hasil: ${aiRes.decision} (skor ${combinedScore}%)` };
+    return { ok: true, message: summaries.join(" | "), summaries };
   } catch (err) {
     addLog(`Error scan: ${err.message}`, "error");
     return { ok: false, message: err.message };
@@ -521,25 +783,20 @@ function extractToken(req) {
   return "";
 }
 
-function sanitizeStateForClient(token) {
-  const { quote } = splitSymbol(state.config.symbol);
-  const idrRate = quote === "IDR" || quote === "BIDR" ? 1 : Number(state.usdtIdrRate) || 16250;
-  let pos = null;
-  let positionValueQuote = 0;
-
-  if (state.position) {
-    const p = state.position;
-    const cur = state.lastPrice || p.entryPrice;
-    const feeRate = (Number(state.config.feePct) || 0.15) / 100;
-    const grossValue = p.qty * cur;
-    const netValue = grossValue * (1 - feeRate);
-    const netPnlQuote = netValue - p.costQuote;
-    const netPnlPct = p.costQuote > 0 ? (netPnlQuote / p.costQuote) * 100 : 0;
-    const priceDiff = cur - p.entryPrice;
-    const priceDiffPct = p.entryPrice > 0 ? (priceDiff / p.entryPrice) * 100 : 0;
-    positionValueQuote = netValue;
-
-    pos = {
+function enrichBotPosition(bot, idrRate) {
+  if (!bot || !bot.position) return { pos: null, valueQuote: 0 };
+  const p = bot.position;
+  const cur = bot.lastPrice || p.entryPrice;
+  const feeRate = (Number(state.config.feePct) || 0.15) / 100;
+  const grossValue = p.qty * cur;
+  const netValue = grossValue * (1 - feeRate);
+  const netPnlQuote = netValue - p.costQuote;
+  const netPnlPct = p.costQuote > 0 ? (netPnlQuote / p.costQuote) * 100 : 0;
+  const priceDiff = cur - p.entryPrice;
+  const priceDiffPct = p.entryPrice > 0 ? (priceDiff / p.entryPrice) * 100 : 0;
+  return {
+    valueQuote: netValue,
+    pos: {
       ...p,
       currentPrice: cur,
       currentValueQuote: netValue,
@@ -551,14 +808,72 @@ function sanitizeStateForClient(token) {
       unrealizedIdr: netPnlQuote * idrRate,
       unrealizedPct: netPnlPct,
       pnlState: netPnlQuote > 0 ? "UNTUNG" : netPnlQuote < 0 ? "RUGI" : "IMPAS"
+    }
+  };
+}
+
+function sanitizeStateForClient(token) {
+  const { quote } = splitSymbol(state.config.symbol);
+  const idrRate = quote === "IDR" || quote === "BIDR" ? 1 : Number(state.usdtIdrRate) || 16250;
+  let totalPositionValueQuote = 0;
+  let activePositionsCount = 0;
+  const enrichedBots = {};
+
+  for (const sym of PARALLEL_SYMBOLS) {
+    const rawBot = (state.bots && state.bots[sym]) || createBotSlot(sym);
+    const { pos: bPos, valueQuote } = enrichBotPosition(rawBot, idrRate);
+    totalPositionValueQuote += valueQuote;
+    if (bPos) activePositionsCount += 1;
+    enrichedBots[sym] = {
+      ...rawBot,
+      position: bPos
     };
   }
+
+  const primarySym = PARALLEL_SYMBOLS.includes(state.config.symbol) ? state.config.symbol : "BTCUSDT";
+  const primaryBot = enrichedBots[primarySym] || enrichedBots.BTCUSDT;
 
   const activeCashQuote =
     state.config.mode === "live" && state.liveQuoteBalance !== null
       ? Number(state.liveQuoteBalance)
       : Number(state.paperBalance) || 0;
-  const totalEquityQuote = activeCashQuote + positionValueQuote;
+  const totalEquityQuote = activeCashQuote + totalPositionValueQuote;
+
+  const dailyPnlIdr = (Number(state.dailyPnlQuote) || 0) * idrRate;
+  const dailyTargetIdr = Math.max(0, Number(state.config.dailyTargetIdr) || 0);
+  const dailyTargetAchieved = dailyTargetIdr > 0 && dailyPnlIdr >= dailyTargetIdr;
+  const dailyTargetProgressPct = dailyTargetIdr > 0 ? (dailyPnlIdr / dailyTargetIdr) * 100 : 0;
+
+  // Pastikan rekap hari ini selalu sinkron di daftar dailyHistory untuk client
+  const todayKey = state.dailyPnlDate || getLocalDateStr();
+  const rawDaily = Array.isArray(state.dailyHistory) ? state.dailyHistory.slice() : [];
+  const hasToday = rawDaily.some((d) => d.date === todayKey);
+  if (!hasToday) {
+    rawDaily.unshift({
+      date: todayKey,
+      targetIdr: dailyTargetIdr,
+      targetQuote: idrRate > 0 ? dailyTargetIdr / idrRate : 0,
+      pnlQuote: Number(state.dailyPnlQuote) || 0,
+      pnlIdr: dailyPnlIdr,
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      achieved: dailyTargetAchieved
+    });
+  } else {
+    for (let i = 0; i < rawDaily.length; i++) {
+      if (rawDaily[i].date === todayKey) {
+        rawDaily[i] = {
+          ...rawDaily[i],
+          targetIdr: dailyTargetIdr,
+          targetQuote: idrRate > 0 ? dailyTargetIdr / idrRate : 0,
+          pnlQuote: Number(state.dailyPnlQuote) || 0,
+          pnlIdr: dailyPnlIdr,
+          achieved: dailyTargetAchieved
+        };
+      }
+    }
+  }
 
   return {
     ...state,
@@ -569,8 +884,19 @@ function sanitizeStateForClient(token) {
     cashIdr: activeCashQuote * idrRate,
     totalEquityQuote,
     totalEquityIdr: totalEquityQuote * idrRate,
-    dailyPnlIdr: (Number(state.dailyPnlQuote) || 0) * idrRate,
-    position: pos
+    dailyPnlIdr,
+    dailyTargetIdr,
+    dailyTargetAchieved,
+    dailyTargetProgressPct,
+    dailyHistory: rawDaily,
+    symbols: [...PARALLEL_SYMBOLS],
+    bots: enrichedBots,
+    activePositionsCount,
+    position: primaryBot.position,
+    lastPrice: primaryBot.lastPrice,
+    candles: primaryBot.candles,
+    lastAnalysis: primaryBot.lastAnalysis,
+    lastAiDecision: primaryBot.lastAiDecision
   };
 }
 
@@ -702,6 +1028,7 @@ const server = http.createServer(async (req, res) => {
     if (state.config.symbol !== prevSymbol || state.config.interval !== prevInterval) {
       state.lastClosedCandleTime = 0;
     }
+    syncTodayDailyHistory();
     saveState();
     addLog(`Pengaturan diperbarui (${state.config.mode.toUpperCase()} • ${state.config.symbol} ${state.config.interval} • AI ${state.config.aiProvider}/${state.config.aiModel}).`);
     return sendJson(res, 200, { ok: true, config: state.config });
@@ -715,41 +1042,50 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && urlPath === "/api/scan") {
-    const result = await runMarketScan(true);
+    const body = await readBody(req);
+    const sym = body.symbol && PARALLEL_SYMBOLS.includes(body.symbol) ? body.symbol : null;
+    const result = await runMarketScan(true, sym);
     return sendJson(res, 200, result);
   }
 
   if (req.method === "POST" && urlPath === "/api/manual-buy") {
-    if (state.position) {
-      return sendJson(res, 400, { ok: false, message: "Sudah ada posisi aktif. Jual dulu sebelum BUY baru." });
+    const body = await readBody(req);
+    const sym = PARALLEL_SYMBOLS.includes(body.symbol) ? body.symbol : (PARALLEL_SYMBOLS.includes(state.config.symbol) ? state.config.symbol : "BTCUSDT");
+    const bot = state.bots[sym] || (state.bots[sym] = createBotSlot(sym));
+    if (bot.position) {
+      return sendJson(res, 400, { ok: false, message: `Sudah ada posisi aktif di ${sym}. Jual dulu sebelum BUY baru.` });
     }
-    if (!state.lastPrice) {
+    if (!bot.lastPrice) {
       try {
-        const tick = await getTickerPrice(state.config.symbol);
-        state.lastPrice = tick.price;
-        state.priceSource = tick.source;
-        state.lastUpdatedAt = Date.now();
+        const tick = await getTickerPrice(sym);
+        bot.lastPrice = tick.price;
+        bot.priceSource = tick.source;
+        bot.lastUpdatedAt = Date.now();
       } catch (err) {
-        return sendJson(res, 400, { ok: false, message: "Harga live belum tersedia: " + err.message });
+        return sendJson(res, 400, { ok: false, message: `Harga live ${sym} belum tersedia: ` + err.message });
       }
     }
     const ok = await openBuyPosition(
-      state.lastPrice,
+      sym,
+      bot.lastPrice,
       { setupType: "MANUAL_BUY", signals: ["Eksekusi BUY manual (bypass AI)"] },
-      { reason: "BUY manual dari Dashboard untuk uji simulasi & TP/SL." }
+      { reason: `BUY manual ${sym} dari Dashboard untuk uji simulasi & TP/SL.` }
     );
     if (!ok) {
       return sendJson(res, 400, { ok: false, message: "Gagal BUY (cek saldo paper atau log)." });
     }
-    return sendJson(res, 200, { ok: true, message: `BUY manual berhasil @ ${state.lastPrice}` });
+    return sendJson(res, 200, { ok: true, message: `BUY manual ${sym} berhasil @ ${bot.lastPrice}` });
   }
 
   if (req.method === "POST" && urlPath === "/api/close-position") {
-    if (!state.position || !state.lastPrice) {
-      return sendJson(res, 400, { ok: false, message: "Tidak ada posisi aktif." });
+    const body = await readBody(req);
+    const sym = PARALLEL_SYMBOLS.includes(body.symbol) ? body.symbol : (PARALLEL_SYMBOLS.includes(state.config.symbol) ? state.config.symbol : "BTCUSDT");
+    const bot = state.bots[sym];
+    if (!bot || !bot.position || !bot.lastPrice) {
+      return sendJson(res, 400, { ok: false, message: `Tidak ada posisi aktif di ${sym}.` });
     }
-    await closePosition(state.lastPrice, "MANUAL_CLOSE");
-    return sendJson(res, 200, { ok: true, message: "Posisi berhasil dijual manual." });
+    await closePosition(sym, bot.lastPrice, "MANUAL_CLOSE");
+    return sendJson(res, 200, { ok: true, message: `Posisi ${sym} berhasil dijual manual.` });
   }
 
   if (req.method === "POST" && urlPath === "/api/test-ai") {
@@ -849,8 +1185,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && urlPath === "/api/reset-paper") {
     state.paperBalance = Number(state.config.paperInitialBalance) || 1000;
     state.position = null;
+    for (const sym of PARALLEL_SYMBOLS) {
+      if (state.bots[sym]) state.bots[sym].position = null;
+    }
     state.history = [];
     state.dailyPnlQuote = 0;
+    state.dailyHistory = [];
+    syncTodayDailyHistory();
     saveState();
     addLog(`Saldo Paper Trading di-reset ke ${state.paperBalance}.`);
     return sendJson(res, 200, { ok: true });
@@ -860,7 +1201,7 @@ const server = http.createServer(async (req, res) => {
   res.end("Not Found");
 });
 
-// Scheduler: cek harga & TP/SL tiap 10s, scan candle tiap 15s
+// Scheduler: cek harga & TP/SL tiap 10s, scan candle tiap 15s, kurs USD/IDR tiap 5 menit
 setInterval(() => {
   checkPriceAndRisk();
 }, 10000);
@@ -869,8 +1210,15 @@ setInterval(() => {
   if (state.running) runMarketScan(false);
 }, 15000);
 
+setInterval(() => {
+  refreshUsdtIdrRate(true);
+}, 300000);
+
 server.listen(PORT, "0.0.0.0", () => {
   addLog(`Tokocrypto AI Spot Bot aktif di http://0.0.0.0:${PORT}`);
+  syncTodayDailyHistory();
+  saveReports();
+  refreshUsdtIdrRate(true);
   checkPriceAndRisk().then(() => {
     if (state.running) runMarketScan(false);
   });

@@ -244,6 +244,60 @@ async function getTickerPrice(symbol) {
   throw new Error(`Gagal ambil harga (${symbol}): ${errors.join(" | ")}`);
 }
 
+/**
+ * Ambil kurs USD/IDR (atau USDT/IDR) dengan fallback berjenjang:
+ * 1. Tokocrypto (USDT_IDR - real-time)
+ * 2. Indodax (usdtidr - real-time)
+ * 3. ExchangeRate-API Open Access (USD -> IDR)
+ * 4. Frankfurter API / ECB (USD -> IDR)
+ */
+async function getUsdIdrRate() {
+  const errors = [];
+  const isValidRate = (v) => Number.isFinite(v) && v > 10000 && v < 30000;
+
+  // 1. Tokocrypto USDT_IDR
+  try {
+    const res = await fetchJsonWithTimeout(`${TOKOCRYPTO_BASE}/open/v1/market/ticker/price?symbol=USDT_IDR`, {}, 6000);
+    const rate = Number(res.data?.data?.price ?? res.data?.price);
+    if (res.ok && isValidRate(rate)) return { source: "tokocrypto", rate };
+    errors.push(`tokocrypto: HTTP ${res.status}`);
+  } catch (e) {
+    errors.push(`tokocrypto: ${e.message}`);
+  }
+
+  // 2. Indodax USDT/IDR
+  try {
+    const res = await fetchJsonWithTimeout("https://indodax.com/api/ticker/usdtidr", {}, 6000);
+    const rate = Number(res.data?.ticker?.last);
+    if (res.ok && isValidRate(rate)) return { source: "indodax", rate };
+    errors.push(`indodax: HTTP ${res.status}`);
+  } catch (e) {
+    errors.push(`indodax: ${e.message}`);
+  }
+
+  // 3. ExchangeRate-API Open Access (gratis tanpa API key)
+  try {
+    const res = await fetchJsonWithTimeout("https://open.er-api.com/v6/latest/USD", {}, 6000);
+    const rate = Number(res.data?.rates?.IDR);
+    if (res.ok && isValidRate(rate)) return { source: "open.er-api.com", rate };
+    errors.push(`open.er-api: HTTP ${res.status}`);
+  } catch (e) {
+    errors.push(`open.er-api: ${e.message}`);
+  }
+
+  // 4. Frankfurter API (referensi ECB resmi)
+  try {
+    const res = await fetchJsonWithTimeout("https://api.frankfurter.dev/v1/latest?base=USD&symbols=IDR", {}, 6000);
+    const rate = Number(res.data?.rates?.IDR);
+    if (res.ok && isValidRate(rate)) return { source: "frankfurter.dev", rate };
+    errors.push(`frankfurter: HTTP ${res.status}`);
+  } catch (e) {
+    errors.push(`frankfurter: ${e.message}`);
+  }
+
+  throw new Error(`Semua sumber kurs USD/IDR gagal: ${errors.join(" | ")}`);
+}
+
 let serverTimeOffsetMs = 0;
 let lastTimeSyncAt = 0;
 
@@ -393,6 +447,7 @@ module.exports = {
   splitSymbol,
   getKlines,
   getTickerPrice,
+  getUsdIdrRate,
   getAccountBalances,
   placeLiveOrder,
   fetchJsonWithTimeout

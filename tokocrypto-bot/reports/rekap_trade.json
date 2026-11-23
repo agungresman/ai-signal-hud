@@ -1,0 +1,94 @@
+{
+  "updatedAt": "2026-11-23T03:24:44.659Z",
+  "usdtIdrRate": 18317,
+  "summary": {
+    "totalTrades": 6,
+    "wins": 2,
+    "losses": 4,
+    "winratePct": 33.3,
+    "totalPnlQuote": 1.532608981743337,
+    "totalPnlIdr": 28072.798718592705
+  },
+  "trades": [
+    {
+      "time": "22/11/2026 20:00:48",
+      "exitTime": "23/11/2026 09:44:19",
+      "entryTimestamp": 1795352448815,
+      "exitTimestamp": 1795401859713,
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 60900.41,
+      "exitPrice": 60479,
+      "qty": 0.0016395620325051997,
+      "pnlQuote": -0.9896664443638485,
+      "pnlPct": -0.9896664443638484,
+      "reason": "TREND_BREAK_EXIT",
+      "status": "LOSS"
+    },
+    {
+      "time": "4:01:13 PM",
+      "exitTime": "5:01:55 PM",
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 59826.21,
+      "exitPrice": 60840.69,
+      "qty": 0.0016690009278541964,
+      "pnlQuote": 1.3908533091975954,
+      "pnlPct": 1.3908533091975954,
+      "reason": "TRAILING_STOP",
+      "status": "WIN"
+    },
+    {
+      "time": "2:04:04 AM",
+      "exitTime": "8:30:48 AM",
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 60356.44,
+      "exitPrice": 60094.29,
+      "qty": 0.0016543387913534992,
+      "pnlQuote": -0.732809386782094,
+      "pnlPct": -0.732809386782094,
+      "reason": "TREND_BREAK_EXIT",
+      "status": "LOSS"
+    },
+    {
+      "time": "6:48:11 PM",
+      "exitTime": "8:32:32 PM",
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 58214.39,
+      "exitPrice": 59961.01,
+      "qty": 0.0017152116512772872,
+      "pnlQuote": 2.6915542398924117,
+      "pnlPct": 2.6915542398924117,
+      "reason": "TAKE_PROFIT",
+      "status": "WIN"
+    },
+    {
+      "time": "6:12:09 PM",
+      "exitTime": "6:18:09 PM",
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 58010.59,
+      "exitPrice": 57870.01,
+      "qty": 0.0017212374499207816,
+      "pnlQuote": -0.5413836033688,
+      "pnlPct": -0.5413836033688,
+      "reason": "TREND_BREAK_EXIT",
+      "status": "LOSS"
+    },
+    {
+      "time": "3:45:11 PM",
+      "exitTime": "5:42:07 PM",
+      "symbol": "BTCUSDT",
+      "mode": "paper",
+      "entryPrice": 57863.58,
+      "exitPrice": 57871.61,
+      "qty": 0.0017256104789921396,
+      "pnlQuote": -0.2859391328319276,
+      "pnlPct": -0.2859391328319276,
+      "reason": "TREND_BREAK_EXIT",
+      "status": "LOSS"
+    }
+  ]
+}
