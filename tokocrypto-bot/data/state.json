@@ -65,12 +65,12 @@
     "SOLUSDT"
   ],
   "position": null,
-  "lastPrice": 61744.97,
+  "lastPrice": 61703.91,
   "usdtIdrRate": 18317,
   "usdtIdrSource": "indodax",
   "usdtIdrUpdatedAt": 1795404284220,
   "priceSource": "binance_vision",
-  "lastUpdatedAt": 1795404284450,
+  "lastUpdatedAt": 1795404314381,
   "lastClosedCandleTime": 1795401899999,
   "lastAnalysis": {
     "ready": true,
@@ -407,9 +407,9 @@
   "bots": {
     "BTCUSDT": {
       "symbol": "BTCUSDT",
-      "lastPrice": 61744.97,
+      "lastPrice": 61705.78,
       "priceSource": "binance_vision",
-      "lastUpdatedAt": 1795404284451,
+      "lastUpdatedAt": 1795404313958,
       "lastClosedCandleTime": 1795403699999,
       "lastAnalysis": {
         "ready": true,
@@ -460,9 +460,9 @@
     },
     "ETHUSDT": {
       "symbol": "ETHUSDT",
-      "lastPrice": 1740.9,
+      "lastPrice": 1739.34,
       "priceSource": "binance_vision",
-      "lastUpdatedAt": 1795404284451,
+      "lastUpdatedAt": 1795404313958,
       "lastClosedCandleTime": 1795403699999,
       "lastAnalysis": {
         "ready": true,
@@ -513,9 +513,9 @@
     },
     "SOLUSDT": {
       "symbol": "SOLUSDT",
-      "lastPrice": 71.6,
+      "lastPrice": 71.57,
       "priceSource": "binance_vision",
-      "lastUpdatedAt": 1795404284451,
+      "lastUpdatedAt": 1795404313958,
       "lastClosedCandleTime": 1795403699999,
       "lastAnalysis": {
         "ready": true,
