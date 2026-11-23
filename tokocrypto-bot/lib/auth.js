@@ -1,11 +1,10 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
+const { getDb } = require("./db");
 
-const DATA_DIR = path.join(__dirname, "..", "data");
-const AUTH_FILE = path.join(DATA_DIR, "pin_auth.json");
+const AUTH_COLLECTION = "auth_state";
+const AUTH_DOC_ID = "pin_auth";
 const MAX_LOGIN_COUNT = 10;
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 hari
 
@@ -13,25 +12,10 @@ function generateRandomPin() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function loadAuthData() {
-  try {
-    if (fs.existsSync(AUTH_FILE)) {
-      const raw = fs.readFileSync(AUTH_FILE, "utf8");
-      const data = JSON.parse(raw);
-      if (data && data.currentPin) {
-        if (!data.sessions) data.sessions = {};
-        if (typeof data.usedCount !== "number") data.usedCount = 0;
-        if (!data.maxUses) data.maxUses = MAX_LOGIN_COUNT;
-        return data;
-      }
-    }
-  } catch (err) {
-    console.error("[AUTH] Gagal membaca pin_auth.json, membuat konfigurasi baru:", err.message);
-  }
-
-  // Jika belum ada file auth, generate PIN awal (default awal 6 digit)
+function createDefaultAuthData() {
   const initialPin = generateRandomPin();
-  const initData = {
+  return {
+    _id: AUTH_DOC_ID,
     currentPin: initialPin,
     usedCount: 0,
     maxUses: MAX_LOGIN_COUNT,
@@ -41,25 +25,51 @@ function loadAuthData() {
     sessions: {},
     history: []
   };
-  saveAuthData(initData);
-  console.log("========================================================");
-  console.log(`🔐 [PIN SECURITY] Inisialisasi Auth PIN Berhasil!`);
-  console.log(`   PIN Akses Anda saat ini: ${initialPin}`);
-  console.log(`   PIN ini akan berganti otomatis setiap ${MAX_LOGIN_COUNT}x login.`);
-  console.log("========================================================");
-  return initData;
 }
 
-function saveAuthData(data) {
+let authState = createDefaultAuthData();
+
+async function persistAuthData(data) {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2));
+    const db = getDb();
+    const { _id, ...doc } = data;
+    await db.collection(AUTH_COLLECTION).updateOne(
+      { _id: AUTH_DOC_ID },
+      { $set: doc },
+      { upsert: true }
+    );
   } catch (err) {
-    console.error("[AUTH] Gagal menyimpan pin_auth.json:", err.message);
+    console.error("[AUTH] Gagal menyimpan auth_state ke MongoDB:", err.message);
   }
 }
 
-let authState = loadAuthData();
+function saveAuthData(data) {
+  persistAuthData(data);
+}
+
+async function initAuthFromDb() {
+  const db = getDb();
+  const existing = await db.collection(AUTH_COLLECTION).findOne({ _id: AUTH_DOC_ID });
+  if (existing && existing.currentPin) {
+    authState = {
+      ...createDefaultAuthData(),
+      ...existing,
+      sessions: existing.sessions || {},
+      usedCount: typeof existing.usedCount === "number" ? existing.usedCount : 0,
+      maxUses: existing.maxUses || MAX_LOGIN_COUNT
+    };
+    return authState;
+  }
+
+  authState = createDefaultAuthData();
+  await persistAuthData(authState);
+  console.log("========================================================");
+  console.log(`🔐 [PIN SECURITY] Inisialisasi Auth PIN di MongoDB Berhasil!`);
+  console.log(`   PIN Akses Anda saat ini: ${authState.currentPin}`);
+  console.log(`   PIN ini akan berganti otomatis setiap ${MAX_LOGIN_COUNT}x login.`);
+  console.log("========================================================");
+  return authState;
+}
 
 // Bersihkan session expired secara berkala
 function purgeExpiredSessions() {
@@ -220,6 +230,7 @@ function resetPin(reason = "Reset Manual") {
 }
 
 module.exports = {
+  initAuthFromDb,
   isValidSession,
   revokeSession,
   getAuthStatus,

@@ -30,6 +30,7 @@ const { validateWithAI, normalizeOllamaEndpoint, testAiConnection } = require(".
 const { sendDiscord } = require("./lib/discord");
 const { sendEmail, sendPinEmail } = require("./lib/smtp");
 const {
+  initAuthFromDb,
   isValidSession,
   revokeSession,
   getAuthStatus,
@@ -37,13 +38,12 @@ const {
   resetPin,
   getCurrentPin
 } = require("./lib/auth");
+const { connectDb, getDb, getDbName } = require("./lib/db");
 
 const PORT = Number(process.env.PORT || 3456);
-const DATA_DIR = path.join(__dirname, "data");
-const REPORTS_DIR = path.join(__dirname, "reports");
-const STATE_FILE = path.join(DATA_DIR, "state.json");
 const PUBLIC_HTML = path.join(__dirname, "public", "index.html");
 const PARALLEL_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
+const ENABLE_TRADING_LOOP = process.env.ENABLE_TRADING_LOOP !== "false";
 
 function createBotSlot(symbol) {
   return {
@@ -119,7 +119,7 @@ function createInitialState() {
   };
 }
 
-let state = loadState();
+let state = createInitialState();
 let busyScan = false;
 let lastIdrFetchAt = 0;
 let lastLiveBalFetchAt = 0;
@@ -160,139 +160,86 @@ function formatDateTime(ts) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function loadState() {
+async function loadStateFromDb() {
+  const base = createInitialState();
   try {
-    if (fs.existsSync(STATE_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-      const base = createInitialState();
-      const merged = {
-        ...base,
-        ...parsed,
-        config: { ...DEFAULT_CONFIG, ...(parsed.config || {}) },
-        aiGuard: { locked: false, reason: "", retryAt: 0, failCount: 0 }
-      };
-      const bots = {};
-      for (const sym of PARALLEL_SYMBOLS) {
-        const savedBot = parsed.bots && parsed.bots[sym] ? parsed.bots[sym] : {};
-        bots[sym] = { ...createBotSlot(sym), ...savedBot, symbol: sym, candles: [] };
-      }
-      // Migrasi posisi/harga lama ke slot bot masing-masing jika belum ada
-      const primarySym = PARALLEL_SYMBOLS.includes(merged.config.symbol) ? merged.config.symbol : "BTCUSDT";
-      if (!parsed.bots) {
-        if (merged.position && bots[merged.position.symbol]) {
-          bots[merged.position.symbol].position = merged.position;
-        }
-        if (merged.lastPrice && bots[primarySym]) {
-          bots[primarySym].lastPrice = merged.lastPrice;
-          bots[primarySym].priceSource = merged.priceSource || "-";
-          bots[primarySym].lastUpdatedAt = merged.lastUpdatedAt || 0;
-          bots[primarySym].lastClosedCandleTime = merged.lastClosedCandleTime || 0;
-          bots[primarySym].lastAnalysis = merged.lastAnalysis || null;
-          bots[primarySym].lastAiDecision = merged.lastAiDecision || null;
-        }
-      }
-      merged.bots = bots;
-      merged.symbols = [...PARALLEL_SYMBOLS];
-      return merged;
+    const db = getDb();
+    const saved = await db.collection("bot_state").findOne({ _id: "main" });
+    const trades = await db.collection("trade_history").find({}).sort({ exitTimestamp: -1, _id: -1 }).limit(60).toArray();
+    const dailyRows = await db.collection("daily_recap").find({}).sort({ date: -1 }).limit(90).toArray();
+
+    const merged = {
+      ...base,
+      ...(saved || {}),
+      config: { ...DEFAULT_CONFIG, ...((saved && saved.config) || {}) },
+      aiGuard: { locked: false, reason: "", retryAt: 0, failCount: 0 },
+      history: trades.map(({ _id, ...t }) => t),
+      dailyHistory: dailyRows.map(({ _id, ...d }) => d)
+    };
+    delete merged._id;
+
+    const bots = {};
+    for (const sym of PARALLEL_SYMBOLS) {
+      const savedBot = saved && saved.bots && saved.bots[sym] ? saved.bots[sym] : {};
+      bots[sym] = { ...createBotSlot(sym), ...savedBot, symbol: sym, candles: [] };
     }
-  } catch (_) { }
-  return createInitialState();
+    merged.bots = bots;
+    merged.symbols = [...PARALLEL_SYMBOLS];
+    return merged;
+  } catch (err) {
+    console.error("[DB] Gagal membaca state dari MongoDB:", err.message);
+    return base;
+  }
 }
 
-function saveState() {
+async function persistStateToDb() {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    const { candles, bots, ...persisted } = state;
+    const db = getDb();
+    const { candles, bots, history, dailyHistory, _id, ...persisted } = state;
     const cleanBots = {};
     for (const sym of PARALLEL_SYMBOLS) {
       const b = (bots && bots[sym]) || createBotSlot(sym);
       const { candles: _bc, ...restBot } = b;
       cleanBots[sym] = restBot;
     }
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ ...persisted, bots: cleanBots }, null, 2));
-    saveReports();
-  } catch (_) { }
+    await db.collection("bot_state").updateOne(
+      { _id: "main" },
+      { $set: { ...persisted, bots: cleanBots, updatedAt: new Date() } },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error("[DB] Gagal menyimpan bot_state:", err.message);
+  }
 }
 
-function saveReports() {
+async function persistTradeToDb(record) {
   try {
-    if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true });
-    const idrRate = getActiveIdrRate();
-    const dailyList = Array.isArray(state.dailyHistory) ? state.dailyHistory : [];
-    const tradeList = Array.isArray(state.history) ? state.history : [];
-    const nowIso = new Date().toISOString();
-    const todayKey = state.dailyPnlDate || getLocalDateStr();
+    const db = getDb();
+    await db.collection("trade_history").insertOne({ ...record });
+  } catch (err) {
+    console.error("[DB] Gagal menyimpan trade_history:", err.message);
+  }
+}
 
-    // 1. Rekap Harian (reports/rekap_harian.json)
-    const dailySummary = dailyList.reduce(
-      (acc, d) => {
-        acc.totalDays += 1;
-        if (d.achieved) acc.achievedDays += 1;
-        acc.totalTargetIdr += Number(d.targetIdr) || 0;
-        acc.totalPnlIdr += Number(d.pnlIdr) || 0;
-        acc.totalPnlQuote += Number(d.pnlQuote) || 0;
-        acc.totalTrades += Number(d.trades) || 0;
-        acc.totalWins += Number(d.wins) || 0;
-        acc.totalLosses += Number(d.losses) || 0;
-        return acc;
-      },
-      { totalDays: 0, achievedDays: 0, totalTargetIdr: 0, totalPnlIdr: 0, totalPnlQuote: 0, totalTrades: 0, totalWins: 0, totalLosses: 0 }
+async function persistDailyRecapToDb(entry) {
+  if (!entry || !entry.date) return;
+  try {
+    const db = getDb();
+    await db.collection("daily_recap").updateOne(
+      { _id: entry.date },
+      { $set: { ...entry, updatedAt: new Date() } },
+      { upsert: true }
     );
-    dailySummary.winratePct = dailySummary.totalTrades > 0 ? Math.round((dailySummary.totalWins / dailySummary.totalTrades) * 1000) / 10 : 0;
+  } catch (err) {
+    console.error("[DB] Gagal menyimpan daily_recap:", err.message);
+  }
+}
 
-    fs.writeFileSync(
-      path.join(REPORTS_DIR, "rekap_harian.json"),
-      JSON.stringify({ updatedAt: nowIso, usdtIdrRate: idrRate, summary: dailySummary, days: dailyList }, null, 2)
-    );
-
-    // 2. Rekap Trade (reports/rekap_trade.json) — arsip hingga 500 trade terbaru
-    const tradeFile = path.join(REPORTS_DIR, "rekap_trade.json");
-    let archivedTrades = [];
-    if (fs.existsSync(tradeFile)) {
-      try {
-        const prev = JSON.parse(fs.readFileSync(tradeFile, "utf8"));
-        if (Array.isArray(prev.trades)) archivedTrades = prev.trades;
-      } catch (_) {}
-    }
-    const seenKeys = new Set(tradeList.map((t) => `${t.symbol}_${t.entryTimestamp || t.time}_${t.exitTimestamp || t.exitTime}`));
-    const mergedTrades = [...tradeList];
-    for (const old of archivedTrades) {
-      const k = `${old.symbol}_${old.entryTimestamp || old.time}_${old.exitTimestamp || old.exitTime}`;
-      if (!seenKeys.has(k)) {
-        seenKeys.add(k);
-        mergedTrades.push(old);
-      }
-    }
-    if (mergedTrades.length > 500) mergedTrades.length = 500;
-
-    const tWins = mergedTrades.filter((t) => t.status === "WIN").length;
-    const tTotal = mergedTrades.length;
-    const tPnlQuote = mergedTrades.reduce((s, t) => s + (Number(t.pnlQuote) || 0), 0);
-    const tradeSummary = {
-      totalTrades: tTotal,
-      wins: tWins,
-      losses: tTotal - tWins,
-      winratePct: tTotal > 0 ? Math.round((tWins / tTotal) * 1000) / 10 : 0,
-      totalPnlQuote: tPnlQuote,
-      totalPnlIdr: tPnlQuote * idrRate
-    };
-
-    fs.writeFileSync(
-      tradeFile,
-      JSON.stringify({ updatedAt: nowIso, usdtIdrRate: idrRate, summary: tradeSummary, trades: mergedTrades }, null, 2)
-    );
-
-    // 3. Snapshot per tanggal (reports/harian_YYYY-MM-DD.json)
-    const todayRec = dailyList.find((d) => d.date === todayKey) || null;
-    const todayTrades = mergedTrades.filter((t) => {
-      if (t.exitTimestamp) return getLocalDateStr(t.exitTimestamp) === todayKey;
-      return false;
-    });
-    fs.writeFileSync(
-      path.join(REPORTS_DIR, `harian_${todayKey}.json`),
-      JSON.stringify({ updatedAt: nowIso, date: todayKey, usdtIdrRate: idrRate, daily: todayRec, trades: todayTrades }, null, 2)
-    );
-  } catch (_) {}
+function saveState() {
+  persistStateToDb();
+  const todayKey = state.dailyPnlDate || getLocalDateStr();
+  const todayEntry = Array.isArray(state.dailyHistory) ? state.dailyHistory.find((d) => d.date === todayKey) : null;
+  if (todayEntry) persistDailyRecapToDb(todayEntry);
 }
 
 function addLog(msg, level = "info") {
@@ -522,6 +469,7 @@ async function closePosition(symbol, exitPrice, exitReason) {
 
   state.history.unshift(record);
   if (state.history.length > 60) state.history.pop();
+  persistTradeToDb(record);
   bot.position = null;
   if (sym === state.config.symbol) state.position = null;
 
@@ -1066,26 +1014,77 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && urlPath === "/api/reports/download") {
-    saveReports();
     const u = new URL(req.url, "http://localhost");
     const type = String(u.searchParams.get("type") || "daily").toLowerCase();
     const dateParam = String(u.searchParams.get("date") || "").trim();
-    let fileName = "rekap_harian.json";
+    const idrRate = getActiveIdrRate();
+    const nowIso = new Date().toISOString();
+    const db = getDb();
+
     if (type === "trade") {
-      fileName = "rekap_trade.json";
-    } else if (type === "today") {
+      const rows = await db.collection("trade_history").find({}).sort({ exitTimestamp: -1, _id: -1 }).limit(1000).toArray();
+      const trades = rows.map(({ _id, ...t }) => t);
+      const tWins = trades.filter((t) => t.status === "WIN").length;
+      const tPnlQuote = trades.reduce((s, t) => s + (Number(t.pnlQuote) || 0), 0);
+      const payload = {
+        updatedAt: nowIso,
+        usdtIdrRate: idrRate,
+        summary: {
+          totalTrades: trades.length,
+          wins: tWins,
+          losses: trades.length - tWins,
+          winratePct: trades.length > 0 ? Math.round((tWins / trades.length) * 1000) / 10 : 0,
+          totalPnlQuote: tPnlQuote,
+          totalPnlIdr: tPnlQuote * idrRate
+        },
+        trades
+      };
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="rekap_trade.json"'
+      });
+      return res.end(JSON.stringify(payload, null, 2));
+    }
+
+    if (type === "today") {
       const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : (state.dailyPnlDate || getLocalDateStr());
-      fileName = `harian_${targetDate}.json`;
+      const dailyDoc = await db.collection("daily_recap").findOne({ _id: targetDate });
+      const allTrades = await db.collection("trade_history").find({}).sort({ exitTimestamp: -1, _id: -1 }).limit(500).toArray();
+      const todayTrades = allTrades
+        .map(({ _id, ...t }) => t)
+        .filter((t) => t.exitTimestamp && getLocalDateStr(t.exitTimestamp) === targetDate);
+      const cleanDaily = dailyDoc ? (({ _id, updatedAt, ...d }) => d)(dailyDoc) : null;
+      const payload = { updatedAt: nowIso, date: targetDate, usdtIdrRate: idrRate, daily: cleanDaily, trades: todayTrades };
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": `attachment; filename="harian_${targetDate}.json"`
+      });
+      return res.end(JSON.stringify(payload, null, 2));
     }
-    const filePath = path.join(REPORTS_DIR, fileName);
-    if (!fs.existsSync(filePath)) {
-      return sendJson(res, 404, { ok: false, message: `File ${fileName} belum tersedia.` });
-    }
+
+    const dailyDocs = await db.collection("daily_recap").find({}).sort({ date: -1 }).limit(365).toArray();
+    const days = dailyDocs.map(({ _id, updatedAt, ...d }) => d);
+    const dailySummary = days.reduce(
+      (acc, d) => {
+        acc.totalDays += 1;
+        if (d.achieved) acc.achievedDays += 1;
+        acc.totalTargetIdr += Number(d.targetIdr) || 0;
+        acc.totalPnlIdr += Number(d.pnlIdr) || 0;
+        acc.totalPnlQuote += Number(d.pnlQuote) || 0;
+        acc.totalTrades += Number(d.trades) || 0;
+        acc.totalWins += Number(d.wins) || 0;
+        acc.totalLosses += Number(d.losses) || 0;
+        return acc;
+      },
+      { totalDays: 0, achievedDays: 0, totalTargetIdr: 0, totalPnlIdr: 0, totalPnlQuote: 0, totalTrades: 0, totalWins: 0, totalLosses: 0 }
+    );
+    dailySummary.winratePct = dailySummary.totalTrades > 0 ? Math.round((dailySummary.totalWins / dailySummary.totalTrades) * 1000) / 10 : 0;
+    const payload = { updatedAt: nowIso, usdtIdrRate: idrRate, summary: dailySummary, days };
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${fileName}"`
+      "Content-Disposition": 'attachment; filename="rekap_harian.json"'
     });
-    return res.end(fs.readFileSync(filePath));
+    return res.end(JSON.stringify(payload, null, 2));
   }
 
   if (req.method === "POST" && urlPath === "/api/config") {
@@ -1272,6 +1271,11 @@ const server = http.createServer(async (req, res) => {
     state.history = [];
     state.dailyPnlQuote = 0;
     state.dailyHistory = [];
+    try {
+      const db = getDb();
+      await db.collection("trade_history").deleteMany({});
+      await db.collection("daily_recap").deleteMany({});
+    } catch (_) {}
     syncTodayDailyHistory();
     saveState();
     addLog(`Saldo Paper Trading di-reset ke ${state.paperBalance}.`);
@@ -1282,25 +1286,43 @@ const server = http.createServer(async (req, res) => {
   res.end("Not Found");
 });
 
-// Scheduler: cek harga & TP/SL tiap 10s, scan candle tiap 15s, kurs USD/IDR tiap 5 menit
-setInterval(() => {
-  checkPriceAndRisk();
-}, 10000);
-
-setInterval(() => {
-  if (state.running) runMarketScan(false);
-}, 15000);
-
-setInterval(() => {
-  refreshUsdtIdrRate(true);
-}, 300000);
-
-server.listen(PORT, "0.0.0.0", () => {
-  addLog(`Tokocrypto AI Spot Bot aktif di http://0.0.0.0:${PORT}`);
+// Bootstrap: Konek MongoDB -> Init Auth & State -> Jalankan Server & Scheduler
+async function bootstrap() {
+  await connectDb();
+  console.log(`[DB] Terhubung ke MongoDB (database: ${getDbName()})`);
+  await initAuthFromDb();
+  state = await loadStateFromDb();
   syncTodayDailyHistory();
-  saveReports();
-  refreshUsdtIdrRate(true);
-  checkPriceAndRisk().then(() => {
-    if (state.running) runMarketScan(false);
+  saveState();
+
+  if (ENABLE_TRADING_LOOP) {
+    setInterval(() => {
+      checkPriceAndRisk();
+    }, 10000);
+
+    setInterval(() => {
+      if (state.running) runMarketScan(false);
+    }, 15000);
+
+    setInterval(() => {
+      refreshUsdtIdrRate(true);
+    }, 300000);
+  } else {
+    console.log("[BOT] ENABLE_TRADING_LOOP=false — Mode Dashboard/Monitoring saja (tidak mengeksekusi scheduler otomatis).");
+  }
+
+  server.listen(PORT, "0.0.0.0", () => {
+    addLog(`Tokocrypto AI Spot Bot aktif di http://0.0.0.0:${PORT} (MongoDB: ${getDbName()})`);
+    refreshUsdtIdrRate(true);
+    if (ENABLE_TRADING_LOOP) {
+      checkPriceAndRisk().then(() => {
+        if (state.running) runMarketScan(false);
+      });
+    }
   });
+}
+
+bootstrap().catch((err) => {
+  console.error("[FATAL] Gagal menjalankan server:", err);
+  process.exit(1);
 });

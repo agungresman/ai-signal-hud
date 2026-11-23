@@ -7,5 +7,7 @@
     "start": "node --watch-preserve-output --watch-path=server.js --watch-path=lib --watch-path=.env server.js",
     "start:prod": "node server.js"
   },
-  "dependencies": {}
+  "dependencies": {
+    "mongodb": "^7.9.1"
+  }
 }
